@@ -3,8 +3,66 @@
   <head>
     <meta charset="utf-8" />
     <title>{{title}}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        color: #1d1d1f;
+        line-height: 1.5;
+      }
+      h1 { margin-bottom: 8px; }
+      .meta { color: #86868b; font-size: 14px; margin-bottom: 32px; }
+      .step {
+        margin-bottom: 32px;
+        border: 1px solid #e8e8ed;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .step-header {
+        padding: 12px 16px;
+        background: #f5f5f7;
+        border-bottom: 1px solid #e8e8ed;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .step-number {
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        color: #86868b;
+      }
+      .step-app { color: #1d1d1f; }
+      .step-image {
+        position: relative;
+        background: #f5f5f7;
+      }
+      .step-image img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      .click-marker {
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #ff3b30;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        transform: translate(-50%, -50%);
+      }
+      @media print {
+        .step { break-inside: avoid; }
+      }
+    </style>
   </head>
   <body>
     <h1>{{title}}</h1>
+    <p class="meta">{{stepCount}} steps</p>
+    {{steps}}
   </body>
 </html>
