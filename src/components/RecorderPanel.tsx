@@ -10,7 +10,7 @@ type PermissionStatus = {
 type RecorderStatus = "idle" | "recording" | "paused" | "stopped";
 
 const STATUS_LABELS: Record<RecorderStatus, string> = {
-  idle: "Idle",
+  idle: "Ready",
   recording: "Recording",
   paused: "Paused",
   stopped: "Stopped",
@@ -95,11 +95,6 @@ export default function RecorderPanel() {
     [],
   );
 
-  const canRecord = permissionsReady && (status === "idle" || status === "stopped");
-  const canPause = permissionsReady && status === "recording";
-  const canResume = permissionsReady && status === "paused";
-  const canStop = permissionsReady && (status === "recording" || status === "paused");
-
   const handleRequestPermissions = useCallback(async () => {
     setError(null);
     try {
@@ -138,111 +133,116 @@ export default function RecorderPanel() {
 
   return (
     <main className="panel">
+      {/* Minimal Header */}
       <header className="panel-header">
-        <div>
-          <p className="eyebrow">StepCast</p>
-          <h1 className="panel-title">Capture a clean how-to.</h1>
-        </div>
+        <h1 className="panel-title">StepCast</h1>
         <div className="status-chip" data-tone={STATUS_TONES[status]}>
           {STATUS_LABELS[status]}
         </div>
       </header>
 
-      <section className="panel-card">
-        <label className="field">
-          <span>Guide title</span>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.currentTarget.value)}
-            placeholder="Give this guide a name"
-          />
-        </label>
-
-        <div className="permissions">
-          {permissions && missingPermissions.length > 0 && (
+      {/* Permissions - only show if missing */}
+      {missingPermissions.length > 0 && (
+        <section className="panel-card">
+          <div className="permissions">
             <div className="permission-banner warn">
-              Missing: {missingPermissions.join(", ")}. Recording will not start until granted.
+              Missing: {missingPermissions.join(", ")}
             </div>
-          )}
-          {permissions && missingPermissions.length === 0 && (
-            <div className="permission-banner ok">
-              All permissions granted. Ready to record.
+            <div className="permission-row">
+              <span>Screen Recording</span>
+              <span className={permissions?.screen_recording ? "pill ok" : "pill warn"}>
+                {permissions?.screen_recording ? "OK" : "Missing"}
+              </span>
             </div>
-          )}
-          <div className="permission-row">
-            <span>Screen Recording</span>
-            <span className={permissions?.screen_recording ? "pill ok" : "pill warn"}>
-              {permissions?.screen_recording ? "Granted" : "Missing"}
-            </span>
-          </div>
-          <div className="permission-row">
-            <span>Accessibility</span>
-            <span className={permissions?.accessibility ? "pill ok" : "pill warn"}>
-              {permissions?.accessibility ? "Granted" : "Missing"}
-            </span>
-          </div>
-          {missingPermissions.length > 0 && (
+            <div className="permission-row">
+              <span>Accessibility</span>
+              <span className={permissions?.accessibility ? "pill ok" : "pill warn"}>
+                {permissions?.accessibility ? "OK" : "Missing"}
+              </span>
+            </div>
             <button className="button ghost" onClick={handleRequestPermissions}>
-              Request permissions
+              Grant Permissions
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Controls & Steps */}
+      <section className="panel-card" style={{ flex: 1, minHeight: 0 }}>
+        {/* Context-dependent buttons */}
+        <div className="controls">
+          {(status === "idle" || status === "stopped") && (
+            <button
+              className="button primary"
+              onClick={() => handleCommand("start", "recording")}
+              disabled={!permissionsReady}
+            >
+              Start Recording
             </button>
           )}
-        </div>
-      </section>
 
-      <section className="panel-card">
-        <div className="controls">
-          <button
-            className="button primary"
-            onClick={() => handleCommand("start", "recording")}
-            disabled={!canRecord}
-          >
-            Record
-          </button>
-          <button
-            className="button"
-            onClick={() => handleCommand("pause", "paused")}
-            disabled={!canPause}
-          >
-            Pause
-          </button>
-          <button
-            className="button"
-            onClick={() => handleCommand("resume", "recording")}
-            disabled={!canResume}
-          >
-            Resume
-          </button>
-          <button
-            className="button danger"
-            onClick={() => handleCommand("stop", "stopped")}
-            disabled={!canStop}
-          >
-            Stop
-          </button>
+          {status === "recording" && (
+            <>
+              <button
+                className="button"
+                onClick={() => handleCommand("pause", "paused")}
+              >
+                Pause
+              </button>
+              <button
+                className="button danger"
+                onClick={() => handleCommand("stop", "stopped")}
+              >
+                Stop
+              </button>
+            </>
+          )}
+
+          {status === "paused" && (
+            <>
+              <button
+                className="button primary"
+                onClick={() => handleCommand("resume", "recording")}
+              >
+                Resume
+              </button>
+              <button
+                className="button danger"
+                onClick={() => handleCommand("stop", "stopped")}
+              >
+                Stop
+              </button>
+            </>
+          )}
         </div>
 
+        {/* Steps List */}
         <div className="steps">
           <div className="steps-header">
             <h2>Steps</h2>
             <span className="muted">0 captured</span>
           </div>
           <div className="steps-empty">
-            Waiting for your first click. The list will fill as you record.
+            Click anywhere to capture steps.
           </div>
         </div>
       </section>
 
+      {/* Export with title input */}
       <section className="panel-card export-card">
-        <div>
-          <h2>Export</h2>
-          <p className="muted">Generate HTML, Markdown, or print-ready PDF.</p>
-        </div>
+        <h2>Export</h2>
+        <input
+          className="title-input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Guide title..."
+        />
         <div className="export-actions">
           <button className="button" onClick={handleExportHtml}>
             HTML
           </button>
           <button className="button" onClick={handleExportMarkdown}>
-            Markdown
+            MD
           </button>
           <button className="button primary" onClick={handleExportPdf}>
             PDF

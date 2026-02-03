@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 350,
-        "height": 500,
+        "title": "StepCast",
+        "width": 340,
+        "height": 554,
         "resizable": false,
         "decorations": false,
         "transparent": true,

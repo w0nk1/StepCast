@@ -1,18 +1,18 @@
-use tauri::{AppHandle, LogicalSize, Manager, PhysicalRect, Position, Rect, Size, WebviewUrl};
-use tauri_nspanel::{tauri_panel, ManagerExt, PanelBuilder, PanelLevel, StyleMask};
+use tauri::{AppHandle, Manager, Position, Size};
+use tauri_nspanel::{
+    tauri_panel, CollectionBehavior, ManagerExt, PanelLevel, StyleMask, WebviewWindowExt,
+};
 
-const PANEL_LABEL: &str = "panel";
-const PANEL_WIDTH: f64 = 350.0;
-const PANEL_HEIGHT: f64 = 500.0;
+const PANEL_LABEL: &str = "main";
 
 tauri_panel! {
     panel!(StepCastPanel {
         config: {
-            can_become_key_window: false,
+            can_become_key_window: true,
             can_become_main_window: false,
             becomes_key_only_if_needed: true,
             is_floating_panel: true,
-            hides_on_deactivate: true
+            hides_on_deactivate: false
         }
     })
 }
@@ -21,24 +21,41 @@ pub fn panel_label() -> &'static str {
     PANEL_LABEL
 }
 
-fn panel_size() -> (f64, f64) {
-    (PANEL_WIDTH, PANEL_HEIGHT)
+fn panel_level() -> i64 {
+    PanelLevel::MainMenu.value() + 1
 }
 
+fn panel_collection_behavior() -> CollectionBehavior {
+    CollectionBehavior::new()
+        .can_join_all_spaces()
+        .stationary()
+        .full_screen_auxiliary()
+}
+
+fn panel_style_mask() -> StyleMask {
+    StyleMask::empty().nonactivating_panel()
+}
+
+fn should_convert_existing_window(has_panel: bool, has_window: bool) -> bool {
+    !has_panel && has_window
+}
+
+#[cfg(test)]
 fn resolve_monitor_work_area(
-    current: Option<PhysicalRect<i32, u32>>,
-    primary: Option<PhysicalRect<i32, u32>>,
-    available: Vec<PhysicalRect<i32, u32>>,
-) -> Option<PhysicalRect<i32, u32>> {
+    current: Option<tauri::PhysicalRect<i32, u32>>,
+    primary: Option<tauri::PhysicalRect<i32, u32>>,
+    available: Vec<tauri::PhysicalRect<i32, u32>>,
+) -> Option<tauri::PhysicalRect<i32, u32>> {
     current.or(primary).or_else(|| available.into_iter().next())
 }
 
+#[cfg(test)]
 fn clamp_panel_position(
     x: f64,
     y: f64,
     panel_width: f64,
     panel_height: f64,
-    monitor_rect: PhysicalRect<i32, u32>,
+    monitor_rect: tauri::PhysicalRect<i32, u32>,
 ) -> (f64, f64) {
     let monitor_x = monitor_rect.position.x as f64;
     let monitor_y = monitor_rect.position.y as f64;
@@ -65,77 +82,95 @@ fn clamp_panel_position(
 }
 
 pub fn init(app_handle: &AppHandle) -> tauri::Result<()> {
-    if app_handle.get_webview_panel(PANEL_LABEL).is_ok() {
+    let has_panel = app_handle.get_webview_panel(PANEL_LABEL).is_ok();
+    if has_panel {
         return Ok(());
     }
 
-    let panel = PanelBuilder::<_, StepCastPanel>::new(app_handle, PANEL_LABEL)
-        .url(WebviewUrl::App("index.html".into()))
-        .level(PanelLevel::Floating)
-        .style_mask(StyleMask::empty().nonactivating_panel().utility_window())
-        .becomes_key_only_if_needed(true)
-        .hides_on_deactivate(true)
-        .no_activate(true)
-        .transparent(true)
-        .size(Size::Logical(LogicalSize::new(PANEL_WIDTH, PANEL_HEIGHT)))
-        .with_window(|window| window.decorations(false).transparent(true).resizable(false))
-        .build()?;
+    let window = app_handle.get_webview_window(PANEL_LABEL);
+    if should_convert_existing_window(has_panel, window.is_some()) {
+        if let Some(window) = window {
+            let panel = window.to_panel::<StepCastPanel>()?;
+            panel.set_has_shadow(false);
+            panel.set_opaque(false);
+            panel.set_level(panel_level());
+            panel.set_collection_behavior(panel_collection_behavior().value());
+            panel.set_style_mask(panel_style_mask().value());
+            panel.set_movable_by_window_background(true);
 
-    panel.hide();
+            panel.hide();
+            return Ok(());
+        }
+    }
 
     Ok(())
 }
 
-pub fn position_panel_at_tray_icon(app_handle: &AppHandle, rect: Rect) -> Result<(), String> {
-    let panel = app_handle
-        .get_webview_panel(PANEL_LABEL)
-        .map_err(|err| format!("panel not found: {err:?}"))?;
-
-    let (tray_x, tray_y) = match rect.position {
-        Position::Physical(pos) => (pos.x as f64, pos.y as f64),
-        Position::Logical(pos) => (pos.x, pos.y),
-    };
-    let (tray_width, tray_height) = match rect.size {
-        Size::Physical(size) => (size.width as f64, size.height as f64),
-        Size::Logical(size) => (size.width, size.height),
-    };
-
-    let (panel_width, panel_height) = panel_size();
-    let x = tray_x + (tray_width / 2.0) - (panel_width / 2.0);
-    let y = tray_y + tray_height;
-
-    let window = panel
-        .to_window()
+pub fn position_panel_at_tray_icon(
+    app_handle: &AppHandle,
+    icon_position: Position,
+    icon_size: Size,
+) -> Result<(), String> {
+    let window = app_handle
+        .get_webview_window(PANEL_LABEL)
         .ok_or_else(|| "panel window missing".to_string())?;
 
-    let monitor_rect = resolve_monitor_work_area(
-        window
-            .current_monitor()
-            .ok()
-            .flatten()
-            .map(|monitor| *monitor.work_area()),
-        window
-            .primary_monitor()
-            .ok()
-            .flatten()
-            .map(|monitor| *monitor.work_area()),
-        window
-            .available_monitors()
-            .ok()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|monitor| *monitor.work_area())
-            .collect(),
-    );
-    let (x, y) = match monitor_rect {
-        Some(monitor_rect) => clamp_panel_position(x, y, panel_width, panel_height, monitor_rect),
-        None => (x, y),
+    let (icon_phys_x, icon_phys_y) = match &icon_position {
+        Position::Physical(pos) => (pos.x, pos.y),
+        Position::Logical(pos) => (pos.x as i32, pos.y as i32),
     };
 
-    let position = Position::Physical(tauri::PhysicalPosition::new(
-        x.round() as i32,
-        y.round() as i32,
-    ));
+    let monitors = window.available_monitors().map_err(|err| err.to_string())?;
+    let mut found_monitor = None;
+    for monitor in monitors {
+        let pos = monitor.position();
+        let size = monitor.size();
+        let x_in = icon_phys_x >= pos.x && icon_phys_x < pos.x + size.width as i32;
+        let y_in = icon_phys_y >= pos.y && icon_phys_y < pos.y + size.height as i32;
+        if x_in && y_in {
+            found_monitor = Some(monitor);
+            break;
+        }
+    }
+
+    let monitor = found_monitor
+        .ok_or_else(|| "no monitor found containing tray icon position".to_string())?;
+    let scale_factor = monitor.scale_factor();
+    let window_size = window.outer_size().map_err(|err| err.to_string())?;
+    let window_width_phys = window_size.width as i32;
+
+    let (icon_phys_x, icon_phys_y, icon_width_phys, icon_height_phys) =
+        match (icon_position, icon_size) {
+            (Position::Physical(pos), Size::Physical(size)) => {
+                (pos.x, pos.y, size.width as i32, size.height as i32)
+            }
+            (Position::Logical(pos), Size::Logical(size)) => (
+                (pos.x * scale_factor) as i32,
+                (pos.y * scale_factor) as i32,
+                (size.width * scale_factor) as i32,
+                (size.height * scale_factor) as i32,
+            ),
+            (Position::Physical(pos), Size::Logical(size)) => (
+                pos.x,
+                pos.y,
+                (size.width * scale_factor) as i32,
+                (size.height * scale_factor) as i32,
+            ),
+            (Position::Logical(pos), Size::Physical(size)) => (
+                (pos.x * scale_factor) as i32,
+                (pos.y * scale_factor) as i32,
+                size.width as i32,
+                size.height as i32,
+            ),
+        };
+
+    let icon_center_x_phys = icon_phys_x + (icon_width_phys / 2);
+    let panel_x_phys = icon_center_x_phys - (window_width_phys / 2);
+    let gap_points = 4.0;
+    let gap_phys = (gap_points * scale_factor).round() as i32;
+    let panel_y_phys = icon_phys_y + icon_height_phys + gap_phys;
+
+    let position = tauri::PhysicalPosition::new(panel_x_phys, panel_y_phys);
     window
         .set_position(position)
         .map_err(|err| err.to_string())?;
@@ -145,8 +180,13 @@ pub fn position_panel_at_tray_icon(app_handle: &AppHandle, rect: Rect) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{clamp_panel_position, panel_label, resolve_monitor_work_area};
+    use super::{
+        clamp_panel_position, panel_collection_behavior, panel_label, panel_level,
+        panel_style_mask, resolve_monitor_work_area, should_convert_existing_window,
+    };
+    use serde_json::Value;
     use tauri::{PhysicalPosition, PhysicalRect, PhysicalSize};
+    use tauri_nspanel::{CollectionBehavior, PanelLevel, StyleMask};
 
     fn rect_at(x: i32, y: i32, width: u32, height: u32) -> PhysicalRect<i32, u32> {
         PhysicalRect {
@@ -161,7 +201,51 @@ mod tests {
 
     #[test]
     fn panel_label_is_stable() {
-        assert_eq!(panel_label(), "panel");
+        assert_eq!(panel_label(), "main");
+    }
+
+    #[test]
+    fn should_convert_existing_window_when_missing_panel() {
+        assert!(should_convert_existing_window(false, true));
+        assert!(!should_convert_existing_window(true, true));
+        assert!(!should_convert_existing_window(false, false));
+    }
+
+    #[test]
+    fn panel_size_matches_tauri_config() {
+        let config: Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("valid tauri.conf.json");
+        let width = config["app"]["windows"][0]["width"]
+            .as_f64()
+            .expect("width is number");
+        let height = config["app"]["windows"][0]["height"]
+            .as_f64()
+            .expect("height is number");
+        let expected_width = 340.0;
+        let expected_height = 554.0;
+
+        assert_eq!(width, expected_width);
+        assert_eq!(height, expected_height);
+    }
+
+    #[test]
+    fn panel_level_is_main_menu_plus_one() {
+        assert_eq!(panel_level(), PanelLevel::MainMenu.value() + 1);
+    }
+
+    #[test]
+    fn panel_collection_behavior_matches_expected() {
+        let expected = CollectionBehavior::new()
+            .can_join_all_spaces()
+            .stationary()
+            .full_screen_auxiliary();
+        assert_eq!(panel_collection_behavior(), expected);
+    }
+
+    #[test]
+    fn panel_style_mask_matches_expected() {
+        let expected = StyleMask::empty().nonactivating_panel();
+        assert_eq!(panel_style_mask(), expected);
     }
 
     #[test]
