@@ -2,6 +2,7 @@ pub mod capture;
 pub mod click_event;
 pub mod click_listener;
 pub mod macos_screencapture;
+pub mod pipeline;
 pub mod session;
 pub mod state;
 pub mod storage;
