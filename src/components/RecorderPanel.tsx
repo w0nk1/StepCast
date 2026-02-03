@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { renderHtml, renderMarkdown } from "../export/render";
+import StepItem from "./StepItem";
+import type { Step } from "../types/step";
 
 type PermissionStatus = {
   screen_recording: boolean;
@@ -47,6 +50,7 @@ export default function RecorderPanel() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("New StepCast Guide");
+  const [steps, setSteps] = useState<Step[]>([]);
 
   const permissionsReady = Boolean(
     permissions && permissions.screen_recording && permissions.accessibility,
@@ -65,6 +69,20 @@ export default function RecorderPanel() {
     refreshPermissions();
   }, [refreshPermissions]);
 
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+
+    listen<Step>("step-captured", (event) => {
+      setSteps((prev) => [...prev, event.payload]);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   const missingPermissions = useMemo(() => {
     if (!permissions) {
       return [] as string[];
@@ -78,6 +96,9 @@ export default function RecorderPanel() {
   const handleCommand = useCallback(
     async (command: RecorderCommand, nextStatus?: RecorderStatus) => {
       setError(null);
+      if (command === "start") {
+        setSteps([]);
+      }
       try {
         await invoke(COMMANDS[command]);
         if (nextStatus) {
@@ -220,11 +241,19 @@ export default function RecorderPanel() {
         <div className="steps">
           <div className="steps-header">
             <h2>Steps</h2>
-            <span className="muted">0 captured</span>
+            <span className="muted">{steps.length} captured</span>
           </div>
-          <div className="steps-empty">
-            Click anywhere to capture steps.
-          </div>
+          {steps.length === 0 ? (
+            <div className="steps-empty">
+              Click anywhere to capture steps.
+            </div>
+          ) : (
+            <div className="steps-list">
+              {steps.map((step, index) => (
+                <StepItem key={step.id} step={step} index={index} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
