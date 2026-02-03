@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "macos-permissions:default",
-    "opener:default"
+    "opener:default",
+    "dialog:default"
   ]
 }

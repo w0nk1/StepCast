@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
+import { openPath } from "@tauri-apps/plugin-opener";
 import StepItem from "./StepItem";
 import type { Step } from "../types/step";
 
@@ -152,8 +153,8 @@ export default function RecorderPanel() {
       // For PDF, we export HTML to a temp location and open for printing
       const tempPath = `/tmp/stepcast-guide-${Date.now()}.html`;
       await invoke("export_html", { title, outputPath: tempPath });
-      // Open in default browser for printing
-      window.open(`file://${tempPath}`, "_blank");
+      // Open in default browser for printing (Cmd+P to print as PDF)
+      await openPath(tempPath);
     } catch (err) {
       setError(String(err));
     }
