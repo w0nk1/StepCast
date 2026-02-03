@@ -1,6 +1,7 @@
 pub mod capture;
 pub mod click_event;
 pub mod macos_screencapture;
+pub mod session;
 pub mod state;
 pub mod storage;
 pub mod types;

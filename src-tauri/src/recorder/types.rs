@@ -14,14 +14,16 @@ pub struct Step {
     pub action: ActionType,
     pub x: i32,
     pub y: i32,
+    pub click_x_percent: f32,
+    pub click_y_percent: f32,
     pub app: String,
     pub window_title: String,
     pub screenshot_path: Option<String>,
     pub note: Option<String>,
 }
 
+#[cfg(test)]
 impl Step {
-    #[cfg(test)]
     pub fn sample() -> Self {
         Self {
             id: "step-1".to_string(),
@@ -29,6 +31,8 @@ impl Step {
             action: ActionType::Click,
             x: 10,
             y: 20,
+            click_x_percent: 50.0,
+            click_y_percent: 50.0,
             app: "Finder".to_string(),
             window_title: "Downloads".to_string(),
             screenshot_path: Some("screenshots/step-001.png".to_string()),
