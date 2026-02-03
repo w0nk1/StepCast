@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
+use tauri_nspanel::ManagerExt;
 use base64::Engine;
 
 struct RecorderAppState {
@@ -189,7 +190,17 @@ async fn start_recording(
         .map_err(|_| "recorder state lock poisoned".to_string())?;
     recorder_state
         .start()
-        .map_err(|error| format!("{error:?}"))
+        .map_err(|error| format!("{error:?}"))?;
+
+    // Hide panel and show recording indicator
+    if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
+        panel.hide();
+    }
+    if let Err(e) = tray::set_recording_icon(&app) {
+        eprintln!("Failed to set recording icon: {}", e);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -220,7 +231,10 @@ async fn resume_recording(state: tauri::State<'_, RecorderAppState>) -> Result<(
 }
 
 #[tauri::command]
-fn stop_recording(state: tauri::State<'_, RecorderAppState>) -> Result<Vec<Step>, String> {
+fn stop_recording(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RecorderAppState>,
+) -> Result<Vec<Step>, String> {
     // Stop the processing loop
     state.processing_running.store(false, Ordering::SeqCst);
 
@@ -255,6 +269,14 @@ fn stop_recording(state: tauri::State<'_, RecorderAppState>) -> Result<Vec<Step>
     recorder_state
         .stop()
         .map_err(|error| format!("{error:?}"))?;
+
+    // Reset tray icon and show panel
+    if let Err(e) = tray::set_default_icon(&app) {
+        eprintln!("Failed to reset tray icon: {}", e);
+    }
+    if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
+        panel.show();
+    }
 
     Ok(steps)
 }
