@@ -10,11 +10,9 @@ use recorder::types::Step;
 use serde::Serialize;
 use std::fs;
 use std::io::Read;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
-use tauri_nspanel::ManagerExt;
 use base64::Engine;
 
 struct RecorderAppState {
@@ -192,13 +190,14 @@ async fn start_recording(
         .start()
         .map_err(|error| format!("{error:?}"))?;
 
-    // Hide panel and show recording indicator
-    if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
-        panel.hide();
-    }
-    if let Err(e) = tray::set_recording_icon(&app) {
-        eprintln!("Failed to set recording icon: {}", e);
-    }
+    // TODO: Hide panel and show recording indicator
+    // Temporarily disabled - causes crash
+    // if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
+    //     panel.hide();
+    // }
+    // if let Err(e) = tray::set_recording_icon(&app) {
+    //     eprintln!("Failed to set recording icon: {}", e);
+    // }
 
     Ok(())
 }
@@ -232,7 +231,7 @@ async fn resume_recording(state: tauri::State<'_, RecorderAppState>) -> Result<(
 
 #[tauri::command]
 fn stop_recording(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     state: tauri::State<'_, RecorderAppState>,
 ) -> Result<Vec<Step>, String> {
     // Stop the processing loop
@@ -270,13 +269,14 @@ fn stop_recording(
         .stop()
         .map_err(|error| format!("{error:?}"))?;
 
-    // Reset tray icon and show panel
-    if let Err(e) = tray::set_default_icon(&app) {
-        eprintln!("Failed to reset tray icon: {}", e);
-    }
-    if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
-        panel.show();
-    }
+    // TODO: Reset tray icon and show panel
+    // Temporarily disabled - causes crash
+    // if let Err(e) = tray::set_default_icon(&app) {
+    //     eprintln!("Failed to reset tray icon: {}", e);
+    // }
+    // if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
+    //     panel.show();
+    // }
 
     Ok(steps)
 }
