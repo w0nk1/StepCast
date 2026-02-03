@@ -33,6 +33,10 @@ impl RecorderState {
         }
     }
 
+    pub fn current_state(&self) -> SessionState {
+        self.state
+    }
+
     fn transition(
         &mut self,
         allowed: &[SessionState],
