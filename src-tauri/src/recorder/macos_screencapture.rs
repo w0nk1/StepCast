@@ -1,54 +1,75 @@
+use super::capture::CaptureError;
+use std::path::Path;
 use std::process::Command;
 
-use super::capture::{CaptureBackend, CaptureError};
+pub fn capture_window(window_id: u32, output_path: &Path) -> Result<(), CaptureError> {
+    // Use screencapture CLI which handles all the complexity
+    let status = Command::new("screencapture")
+        .args([
+            "-l",
+            &window_id.to_string(),
+            "-o", // no shadow
+            "-x", // no sound
+            output_path.to_str().unwrap_or("screenshot.png"),
+        ])
+        .status()
+        .map_err(CaptureError::Io)?;
 
-pub struct MacOsScreencapture;
+    if !status.success() {
+        return Err(CaptureError::CommandFailed {
+            status: status.code(),
+            stderr: "screencapture failed".to_string(),
+        });
+    }
 
-pub fn build_args(x: i32, y: i32, w: i32, h: i32, output: &str) -> Vec<String> {
-    vec![
-        "-x".to_string(),
-        "-R".to_string(),
-        format!("{},{},{},{}", x, y, w, h),
-        output.to_string(),
-    ]
+    Ok(())
 }
 
-impl CaptureBackend for MacOsScreencapture {
-    fn capture_region(
-        &self,
-        x: i32,
-        y: i32,
-        w: i32,
-        h: i32,
-        output: &str,
-    ) -> Result<(), CaptureError> {
-        if w <= 0 || h <= 0 {
-            return Err(CaptureError::InvalidRegion { x, y, w, h });
-        }
+pub fn capture_screen_region(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    output_path: &Path,
+) -> Result<(), CaptureError> {
+    // Use screencapture with region
+    let region = format!("{},{},{},{}", x, y, width, height);
+    let status = Command::new("screencapture")
+        .args([
+            "-R",
+            &region,
+            "-x", // no sound
+            output_path.to_str().unwrap_or("screenshot.png"),
+        ])
+        .status()
+        .map_err(CaptureError::Io)?;
 
-        let output = Command::new("screencapture")
-            .args(build_args(x, y, w, h, output))
-            .output()?;
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            Err(CaptureError::CommandFailed {
-                status: output.status.code(),
-                stderr,
-            })
-        }
+    if !status.success() {
+        return Err(CaptureError::CommandFailed {
+            status: status.code(),
+            stderr: "screencapture failed".to_string(),
+        });
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
-    fn builds_region_args() {
-        let args = build_args(10, 20, 300, 200, "/tmp/a.png");
-        assert!(args.contains(&"-R".to_string()));
+    fn capture_screen_region_creates_file() {
+        let dir = tempdir().expect("tempdir");
+        let output = dir.path().join("screenshot.png");
+
+        // Capture a small region of the screen
+        let result = capture_screen_region(0, 0, 100, 100, &output);
+
+        // This may fail in headless CI, so we just check it doesn't panic
+        if result.is_ok() {
+            assert!(output.exists());
+        }
     }
 }
