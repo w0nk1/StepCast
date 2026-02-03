@@ -4,6 +4,7 @@ pub mod macos_screencapture;
 pub mod state;
 pub mod storage;
 pub mod types;
+pub mod window_info;
 
 pub struct Recorder;
 
