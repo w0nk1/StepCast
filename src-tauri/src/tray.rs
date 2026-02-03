@@ -36,41 +36,7 @@ fn should_toggle_panel(button: MouseButton, state: MouseButtonState) -> bool {
     button == MouseButton::Left && state == MouseButtonState::Up
 }
 
-/// Create a red recording dot icon (22x22 for retina)
-fn create_recording_icon() -> Image<'static> {
-    const SIZE: usize = 22;
-    const CENTER: f32 = SIZE as f32 / 2.0;
-    const RADIUS: f32 = 7.0;
-
-    let mut rgba = vec![0u8; SIZE * SIZE * 4];
-
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let dx = x as f32 - CENTER;
-            let dy = y as f32 - CENTER;
-            let dist = (dx * dx + dy * dy).sqrt();
-
-            let idx = (y * SIZE + x) * 4;
-
-            if dist <= RADIUS {
-                // Red color with slight anti-aliasing at edge
-                let alpha = if dist > RADIUS - 1.0 {
-                    ((RADIUS - dist) * 255.0) as u8
-                } else {
-                    255
-                };
-                rgba[idx] = 255;     // R
-                rgba[idx + 1] = 59;  // G
-                rgba[idx + 2] = 48;  // B (Apple red: #ff3b30)
-                rgba[idx + 3] = alpha;
-            }
-        }
-    }
-
-    Image::new_owned(rgba, SIZE as u32, SIZE as u32)
-}
-
-/// Set tray icon to recording state (red dot)
+/// Set tray to recording state (change tooltip for now, icon later)
 pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
     let tray = app_handle.tray_by_id(&TrayIconId::new(TRAY_ID))
         .ok_or_else(|| tauri::Error::Io(std::io::Error::new(
@@ -78,14 +44,12 @@ pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
             "tray icon not found"
         )))?;
 
-    let icon = create_recording_icon();
-    tray.set_icon(Some(icon))?;
-    tray.set_icon_as_template(false)?; // Show actual red color
+    // TODO: Add red recording icon asset later
     tray.set_tooltip(Some("StepCast - Recording..."))?;
     Ok(())
 }
 
-/// Reset tray icon to default state
+/// Reset tray to default state
 pub fn set_default_icon(app_handle: &AppHandle) -> tauri::Result<()> {
     let tray = app_handle.tray_by_id(&TrayIconId::new(TRAY_ID))
         .ok_or_else(|| tauri::Error::Io(std::io::Error::new(
@@ -93,10 +57,6 @@ pub fn set_default_icon(app_handle: &AppHandle) -> tauri::Result<()> {
             "tray icon not found"
         )))?;
 
-    let icon_path = resolve_tray_icon_path(app_handle)?;
-    let icon = Image::from_path(icon_path)?;
-    tray.set_icon(Some(icon))?;
-    tray.set_icon_as_template(true)?;
     tray.set_tooltip(Some("StepCast"))?;
     Ok(())
 }
