@@ -5,3 +5,33 @@
 - Initialized git repo and created GitHub repo w0nk1/StepCast (main).
 - Set repo visibility to private (w0nk1/StepCast).
 - Wrote design doc and implementation plan in docs/plans.
+- Task 1: scaffolded Tauri 2 React+TS (bun), added recorder test harness, ran cargo test fail then pass; restored docs after scaffold overwrite.
+- Task 1 fix: restored .worktrees ignore; re-ran recorder harness failing then passing test.
+- Task 1: code quality review of scaffold + recorder harness + .gitignore.
+- Plan/spec: recorder test rename + test-only module gate.
+- Code quality review: wired recorder in run() to avoid dead_code warning.
+- Task 2: added minimal spec; implementing recorder data model + JSON roundtrip test (TDD).
+- Task 3: added recorder state machine spec; implementing state machine + tests (TDD).
+- Spec: Task 4 macOS screencapture backend: CaptureBackend trait; build_args uses -x -R with region and output; screencapture CLI.
+
+2026-02-03
+- Task 4: add CaptureError, validation, and stderr handling for macOS screencapture backend.
+- Research: Exa code/web search attempts failed (400).
+- Task 5: wrote storage spec; adding recorder storage module + test (TDD).
+- Task 5: define StorageError and update write_steps result type.
+- Task 6: added PermissionStatus test (fail: missing type), wired macos-permissions plugin, app state, commands, and capability permission; test pass.
+- Task 7: Exa code/web search failed (400); fetched tauri-nspanel docs via gh; added panel/tray wiring with non-activating panel, tray click toggle, and panel positioning; TDD panel label test fail then pass.
+- Task 8: ran export render tests; manual verification step (bun tauri dev) deferred due to non-interactive environment.
+- Task 6: make start_recording async with permission checks; remove unused recorder init.
+- Task 7: enforce permissions on resume_recording.
+- Task 7: research attempts failed (Exa code/web search 400); pulled OpenUsage panel/tray patterns via GitHub raw.
+- Task 7: added tauri-nspanel panel/tray modules, tray toggle positioning, and macOS private API window config.
+- Task 7: created code quality fix plan; Exa code search failed (400).
+- Task 7: Exa web search failed (400); applied tray icon fallback, pre-show positioning, and monitor fallback handling.
+- Task 7: created panel code quality fixes plan (remove monitor helper, propagate panel.hide).
+- Task 7: removed resolve_monitor and propagated panel.hide error.
+- Task 7: reintroduced monitor work-area helper, clamped panel position to monitor bounds, and aligned panel size to tauri.conf.json.
+- Task 8: wrote export render spec + plan; adding HTML/Markdown templates and render functions with TDD.
+- Task 8: add HTML escaping for renderHtml and tests for renderMarkdown + escaping.
+- Spec: renderMarkdown escapes HTML entities for title; add test for < > &.
+- Task 9/10: replaced UI with RecorderPanel, added export/print flow styling, wrote README and MIT license.
