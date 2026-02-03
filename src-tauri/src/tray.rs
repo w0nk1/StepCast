@@ -91,9 +91,6 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .tooltip("StepCast")
         .on_tray_icon_event(|tray, event| {
-            if cfg!(debug_assertions) {
-                eprintln!("Tray event: {:?}", event);
-            }
             let app_handle = tray.app_handle();
 
             if let TrayIconEvent::Click {

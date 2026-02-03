@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
+  "productName": "StepCast",
   "version": "0.1.0",
-  "identifier": "com.markus.tauri-app",
+  "identifier": "com.stepcast.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",

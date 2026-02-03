@@ -302,6 +302,40 @@ input::placeholder {
   color: var(--text-primary);
 }
 
+.steps-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button-icon:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.button-icon.danger {
+  color: var(--danger);
+  border-color: rgba(255, 59, 48, 0.3);
+}
+
+.button-icon.danger:hover {
+  background: rgba(255, 59, 48, 0.12);
+}
+
 .steps-list {
   display: flex;
   flex-direction: column;

@@ -293,6 +293,47 @@ fn get_steps(state: tauri::State<'_, RecorderAppState>) -> Result<Vec<Step>, Str
         .unwrap_or_default())
 }
 
+#[tauri::command]
+fn discard_recording(state: tauri::State<'_, RecorderAppState>) -> Result<(), String> {
+    // Stop the processing loop first
+    state.processing_running.store(false, Ordering::SeqCst);
+
+    // Small delay to let processing loop exit
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // Stop and remove click listener
+    {
+        let mut listener_lock = state
+            .click_listener
+            .lock()
+            .map_err(|_| "click listener lock poisoned")?;
+        if let Some(listener) = listener_lock.take() {
+            listener.stop();
+        }
+    }
+
+    // Clear the session completely
+    {
+        let mut session_lock = state
+            .session
+            .lock()
+            .map_err(|_| "session lock poisoned")?;
+        *session_lock = None;
+    }
+
+    // Reset recorder state to idle
+    {
+        let mut recorder_state = state
+            .recorder_state
+            .lock()
+            .map_err(|_| "recorder state lock poisoned")?;
+        // Force reset to idle state
+        *recorder_state = RecorderState::new();
+    }
+
+    Ok(())
+}
+
 #[derive(Serialize)]
 struct StepWithBase64 {
     step: Step,
@@ -420,6 +461,34 @@ fn export_markdown(
     Ok(())
 }
 
+#[tauri::command]
+fn export_html_temp(
+    state: tauri::State<'_, RecorderAppState>,
+    title: String,
+) -> Result<String, String> {
+    let steps = {
+        let session_lock = state.session.lock().map_err(|_| "session lock poisoned")?;
+        session_lock.as_ref().map(|s| s.get_steps().to_vec()).unwrap_or_default()
+    };
+
+    let html = generate_html(&title, &steps);
+
+    // Use user's cache directory for better compatibility
+    let cache_dir = dirs::cache_dir()
+        .ok_or("Could not find cache directory")?;
+    let stepcast_dir = cache_dir.join("stepcast");
+    fs::create_dir_all(&stepcast_dir)
+        .map_err(|e| format!("Failed to create cache dir: {}", e))?;
+
+    let filename = format!("stepcast-guide-{}.html", chrono::Utc::now().timestamp_millis());
+    let output_path = stepcast_dir.join(&filename);
+
+    fs::write(&output_path, html)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _recorder = recorder::Recorder::new();
@@ -454,6 +523,8 @@ pub fn run() {
             get_steps,
             export_html,
             export_markdown,
+            export_html_temp,
+            discard_recording,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2,6 +2,26 @@ use super::capture::CaptureError;
 use std::path::Path;
 use std::process::Command;
 
+/// Capture the entire screen (main display)
+pub fn capture_full_screen(output_path: &Path) -> Result<(), CaptureError> {
+    let status = Command::new("screencapture")
+        .args([
+            "-x", // no sound
+            output_path.to_str().unwrap_or("screenshot.png"),
+        ])
+        .status()
+        .map_err(CaptureError::Io)?;
+
+    if !status.success() {
+        return Err(CaptureError::CommandFailed {
+            status: status.code(),
+            stderr: "screencapture failed".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
 pub fn capture_window(window_id: u32, output_path: &Path) -> Result<(), CaptureError> {
     // Use screencapture CLI which handles all the complexity
     let status = Command::new("screencapture")
@@ -9,6 +29,36 @@ pub fn capture_window(window_id: u32, output_path: &Path) -> Result<(), CaptureE
             "-l",
             &window_id.to_string(),
             "-o", // no shadow
+            "-x", // no sound
+            output_path.to_str().unwrap_or("screenshot.png"),
+        ])
+        .status()
+        .map_err(CaptureError::Io)?;
+
+    if !status.success() {
+        return Err(CaptureError::CommandFailed {
+            status: status.code(),
+            stderr: "screencapture failed".to_string(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Capture a specific region of the screen by bounds.
+/// This is more reliable for modal dialogs than window capture.
+pub fn capture_window_region(
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    output_path: &Path,
+) -> Result<(), CaptureError> {
+    let region = format!("{},{},{},{}", x, y, width, height);
+    let status = Command::new("screencapture")
+        .args([
+            "-R",
+            &region,
             "-x", // no sound
             output_path.to_str().unwrap_or("screenshot.png"),
         ])
