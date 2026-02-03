@@ -1,11 +1,22 @@
 use super::types::Step;
-use std::{io, path::Path};
+use std::{fmt, io, path::Path};
 
 #[derive(Debug)]
 pub enum StorageError {
     Io(io::Error),
     Json(serde_json::Error),
 }
+
+impl fmt::Display for StorageError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StorageError::Io(error) => write!(formatter, "io error: {error}"),
+            StorageError::Json(error) => write!(formatter, "json error: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for StorageError {}
 
 impl From<io::Error> for StorageError {
     fn from(error: io::Error) -> Self {
@@ -19,6 +30,7 @@ impl From<serde_json::Error> for StorageError {
     }
 }
 
+#[allow(dead_code)]
 pub fn write_steps(dir: &Path, steps: &[Step]) -> Result<(), StorageError> {
     let json = serde_json::to_string_pretty(steps)?;
     let path = dir.join("steps.json");

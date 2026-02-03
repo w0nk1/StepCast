@@ -22,6 +22,8 @@ pub enum PipelineError {
     WindowInfoFailed(String),
     /// Failed to capture a screenshot.
     ScreenshotFailed(String),
+    /// Click was on our own app window - should be skipped.
+    OwnAppClick,
 }
 
 impl fmt::Display for PipelineError {
@@ -29,9 +31,13 @@ impl fmt::Display for PipelineError {
         match self {
             PipelineError::WindowInfoFailed(msg) => write!(f, "window info failed: {}", msg),
             PipelineError::ScreenshotFailed(msg) => write!(f, "screenshot failed: {}", msg),
+            PipelineError::OwnAppClick => write!(f, "click on own app window"),
         }
     }
 }
+
+/// App names to filter out (our own app)
+const FILTERED_APPS: &[&str] = &["tauri-app", "StepCast"];
 
 impl std::error::Error for PipelineError {}
 
@@ -67,6 +73,11 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
     // 1. Get frontmost window
     let window_info =
         get_frontmost_window().map_err(|e| PipelineError::WindowInfoFailed(format!("{}", e)))?;
+
+    // 1b. Filter out clicks on our own app
+    if FILTERED_APPS.iter().any(|&app| window_info.app_name == app) {
+        return Err(PipelineError::OwnAppClick);
+    }
 
     // 2. Generate step ID and screenshot path
     let step_id = session.next_step_id();

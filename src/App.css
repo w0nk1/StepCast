@@ -308,6 +308,8 @@ input::placeholder {
   gap: 6px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  max-height: 200px;
 }
 
 .step-item {

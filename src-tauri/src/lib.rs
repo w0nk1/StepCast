@@ -8,9 +8,13 @@ use recorder::session::Session;
 use recorder::state::{RecorderState, SessionState};
 use recorder::types::Step;
 use serde::Serialize;
+use std::fs;
+use std::io::Read;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
+use base64::Engine;
 
 struct RecorderAppState {
     recorder_state: Mutex<RecorderState>,
@@ -267,11 +271,139 @@ fn get_steps(state: tauri::State<'_, RecorderAppState>) -> Result<Vec<Step>, Str
         .unwrap_or_default())
 }
 
+#[derive(Serialize)]
+struct StepWithBase64 {
+    step: Step,
+    image_base64: Option<String>,
+}
+
+fn load_screenshot_base64(path: &str) -> Option<String> {
+    let mut file = fs::File::open(path).ok()?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer).ok()?;
+    Some(base64::engine::general_purpose::STANDARD.encode(&buffer))
+}
+
+fn generate_html(title: &str, steps: &[Step]) -> String {
+    let steps_html: String = steps
+        .iter()
+        .enumerate()
+        .map(|(i, step)| {
+            let step_num = i + 1;
+            let image_html = step.screenshot_path.as_ref()
+                .and_then(|p| load_screenshot_base64(p))
+                .map(|b64| format!(r#"<img src="data:image/png;base64,{}" alt="Step {}">"#, b64, step_num))
+                .unwrap_or_default();
+            let click_marker = if step.screenshot_path.is_some() {
+                format!(r#"<div class="click-marker" style="left: {}%; top: {}%;"></div>"#,
+                    step.click_x_percent, step.click_y_percent)
+            } else {
+                String::new()
+            };
+            format!(r#"
+    <article class="step">
+      <div class="step-header">
+        <span class="step-number">Step {}</span>
+        <span class="step-app">{} - "{}"</span>
+      </div>
+      <div class="step-image">
+        {}
+        {}
+      </div>
+    </article>"#, step_num, html_escape(&step.app), html_escape(&step.window_title), image_html, click_marker)
+        })
+        .collect();
+
+    format!(r#"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{}</title>
+<style>
+* {{ box-sizing: border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #1d1d1f; line-height: 1.5; }}
+h1 {{ margin-bottom: 8px; }}
+.meta {{ color: #86868b; font-size: 14px; margin-bottom: 32px; }}
+.step {{ margin-bottom: 32px; border: 1px solid #e8e8ed; border-radius: 12px; overflow: hidden; }}
+.step-header {{ padding: 12px 16px; background: #f5f5f7; border-bottom: 1px solid #e8e8ed; display: flex; gap: 12px; align-items: center; }}
+.step-number {{ font-weight: 600; font-size: 12px; text-transform: uppercase; color: #86868b; }}
+.step-app {{ color: #1d1d1f; }}
+.step-image {{ position: relative; background: #f5f5f7; }}
+.step-image img {{ display: block; max-width: 100%; height: auto; }}
+.click-marker {{ position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #ff3b30; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transform: translate(-50%, -50%); }}
+@media print {{ .step {{ break-inside: avoid; }} }}
+</style>
+</head>
+<body>
+<h1>{}</h1>
+<p class="meta">{} steps</p>
+{}
+</body>
+</html>"#, html_escape(title), html_escape(title), steps.len(), steps_html)
+}
+
+fn generate_markdown(title: &str, steps: &[Step]) -> String {
+    let steps_md: String = steps
+        .iter()
+        .enumerate()
+        .map(|(i, step)| {
+            let step_num = i + 1;
+            let image_md = step.screenshot_path.as_ref()
+                .and_then(|p| load_screenshot_base64(p))
+                .map(|b64| format!("![Step {}](data:image/png;base64,{})\n\n", step_num, b64))
+                .unwrap_or_default();
+            format!("## Step {}\n\n{}**Action:** Clicked in {} - \"{}\"\n\n---\n\n",
+                step_num, image_md, step.app, step.window_title)
+        })
+        .collect();
+
+    format!("# {}\n\n{} steps\n\n---\n\n{}", title, steps.len(), steps_md)
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+#[tauri::command]
+fn export_html(
+    state: tauri::State<'_, RecorderAppState>,
+    title: String,
+    output_path: String,
+) -> Result<(), String> {
+    let steps = {
+        let session_lock = state.session.lock().map_err(|_| "session lock poisoned")?;
+        session_lock.as_ref().map(|s| s.get_steps().to_vec()).unwrap_or_default()
+    };
+
+    let html = generate_html(&title, &steps);
+    fs::write(&output_path, html).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn export_markdown(
+    state: tauri::State<'_, RecorderAppState>,
+    title: String,
+    output_path: String,
+) -> Result<(), String> {
+    let steps = {
+        let session_lock = state.session.lock().map_err(|_| "session lock poisoned")?;
+        session_lock.as_ref().map(|s| s.get_steps().to_vec()).unwrap_or_default()
+    };
+
+    let markdown = generate_markdown(&title, &steps);
+    fs::write(&output_path, markdown).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _recorder = recorder::Recorder::new();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_nspanel::init())
         .setup(|app| {
@@ -298,6 +430,8 @@ pub fn run() {
             resume_recording,
             stop_recording,
             get_steps,
+            export_html,
+            export_markdown,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

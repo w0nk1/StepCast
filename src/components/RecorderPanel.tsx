@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { renderHtml, renderMarkdown } from "../export/render";
+import { save } from "@tauri-apps/plugin-dialog";
 import StepItem from "./StepItem";
 import type { Step } from "../types/step";
 
@@ -34,16 +34,6 @@ const COMMANDS = {
 } as const;
 
 type RecorderCommand = keyof typeof COMMANDS;
-
-function downloadText(filename: string, contents: string, mime: string) {
-  const blob = new Blob([contents], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function RecorderPanel() {
   const [permissions, setPermissions] = useState<PermissionStatus | null>(null);
@@ -126,30 +116,47 @@ export default function RecorderPanel() {
     }
   }, []);
 
-  const handleExportHtml = useCallback(() => {
-    const html = renderHtml(title);
-    downloadText("stepcast-guide.html", html, "text/html");
-  }, [title]);
-
-  const handleExportMarkdown = useCallback(() => {
-    const markdown = renderMarkdown(title);
-    downloadText("stepcast-guide.md", markdown, "text/markdown");
-  }, [title]);
-
-  const handleExportPdf = useCallback(() => {
-    const html = renderHtml(title);
-    const preview = window.open("", "_blank", "width=960,height=720");
-    if (!preview) {
-      setError("Popup blocked. Allow new windows to print.");
-      return;
+  const handleExportHtml = useCallback(async () => {
+    setError(null);
+    try {
+      const path = await save({
+        defaultPath: "stepcast-guide.html",
+        filters: [{ name: "HTML", extensions: ["html"] }],
+      });
+      if (path) {
+        await invoke("export_html", { title, outputPath: path });
+      }
+    } catch (err) {
+      setError(String(err));
     }
-    preview.document.open();
-    preview.document.write(html);
-    preview.document.close();
-    preview.focus();
-    setTimeout(() => {
-      preview.print();
-    }, 120);
+  }, [title]);
+
+  const handleExportMarkdown = useCallback(async () => {
+    setError(null);
+    try {
+      const path = await save({
+        defaultPath: "stepcast-guide.md",
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+      if (path) {
+        await invoke("export_markdown", { title, outputPath: path });
+      }
+    } catch (err) {
+      setError(String(err));
+    }
+  }, [title]);
+
+  const handleExportPdf = useCallback(async () => {
+    setError(null);
+    try {
+      // For PDF, we export HTML to a temp location and open for printing
+      const tempPath = `/tmp/stepcast-guide-${Date.now()}.html`;
+      await invoke("export_html", { title, outputPath: tempPath });
+      // Open in default browser for printing
+      window.open(`file://${tempPath}`, "_blank");
+    } catch (err) {
+      setError(String(err));
+    }
   }, [title]);
 
   return (

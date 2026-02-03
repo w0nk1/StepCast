@@ -23,7 +23,11 @@
     ],
     "macOSPrivateApi": true,
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$HOME/Library/Caches/**", "$TEMP/**"]
+      }
     }
   },
   "bundle": {

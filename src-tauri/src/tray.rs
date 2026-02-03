@@ -30,6 +30,10 @@ macro_rules! get_or_init_panel {
     }};
 }
 
+fn should_toggle_panel(button: MouseButton, state: MouseButtonState) -> bool {
+    button == MouseButton::Left && state == MouseButtonState::Up
+}
+
 fn resolve_tray_icon_path(app_handle: &AppHandle) -> tauri::Result<PathBuf> {
     let candidates = [
         (BaseDirectory::Resource, "icons/icon.png"),
@@ -57,8 +61,12 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("tray")
         .icon(icon)
         .icon_as_template(true)
+        .show_menu_on_left_click(false)
         .tooltip("StepCast")
         .on_tray_icon_event(|tray, event| {
+            if cfg!(debug_assertions) {
+                eprintln!("Tray event: {:?}", event);
+            }
             let app_handle = tray.app_handle();
 
             if let TrayIconEvent::Click {
@@ -68,7 +76,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                if button == MouseButton::Left && button_state == MouseButtonState::Up {
+                if should_toggle_panel(button, button_state) {
                     let Some(panel) = get_or_init_panel!(app_handle) else {
                         return;
                     };
@@ -78,15 +86,43 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                         return;
                     }
 
-                    if let Err(err) = position_panel_at_tray_icon(app_handle, rect) {
+                    panel.show_and_make_key();
+                    if let Err(err) =
+                        position_panel_at_tray_icon(app_handle, rect.position, rect.size)
+                    {
                         eprintln!("Failed to position panel: {}", err);
                     }
-
-                    panel.show();
                 }
             }
         })
         .build(app_handle)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_toggle_panel;
+    use tauri::tray::{MouseButton, MouseButtonState};
+
+    #[test]
+    fn toggles_on_left_up() {
+        assert!(should_toggle_panel(MouseButton::Left, MouseButtonState::Up));
+    }
+
+    #[test]
+    fn ignores_left_down() {
+        assert!(!should_toggle_panel(
+            MouseButton::Left,
+            MouseButtonState::Down
+        ));
+    }
+
+    #[test]
+    fn ignores_right_clicks() {
+        assert!(!should_toggle_panel(
+            MouseButton::Right,
+            MouseButtonState::Down
+        ));
+    }
 }

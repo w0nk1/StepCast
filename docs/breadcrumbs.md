@@ -35,3 +35,13 @@
 - Task 8: add HTML escaping for renderHtml and tests for renderMarkdown + escaping.
 - Spec: renderMarkdown escapes HTML entities for title; add test for < > &.
 - Task 9/10: replaced UI with RecorderPanel, added export/print flow styling, wrote README and MIT license.
+- Task 7 fix: panel init now converts existing main window to panel, avoiding duplicate "panel" label; added helper test and updated label.
+- Dev run: bun tauri dev started; process terminated due to CLI timeout (app still running in interactive mode).
+- Task 7 fix: enable left-click tray toggle and allow dragging panel by background.
+- UI fix: increased panel height to 640 to keep Export visible without scrolling.
+- UI tweak: increased panel height to 720 after still seeing scroll.
+- UX: tray click now orders panel front regardless for reliable focus.
+- Permissions: request_permissions now opens macOS Privacy panes for Screen Recording/Accessibility when missing.
+- Fix: tray toggle listens on MouseButtonState::Up to avoid double events and ensure show/hide.
+- Fix: panel allows key window and uses show_and_make_key on tray click to ensure visibility.
+- Debug: compared OpenUsage panel/tray implementation; aligned panel level, style mask, collection behavior, and show-before-position behavior.
