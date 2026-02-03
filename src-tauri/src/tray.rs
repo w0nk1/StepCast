@@ -36,7 +36,7 @@ fn should_toggle_panel(button: MouseButton, state: MouseButtonState) -> bool {
     button == MouseButton::Left && state == MouseButtonState::Up
 }
 
-/// Set tray to recording state (change tooltip for now, icon later)
+/// Set tray to recording state with red recording icon
 pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
     let tray = app_handle.tray_by_id(&TrayIconId::new(TRAY_ID))
         .ok_or_else(|| tauri::Error::Io(std::io::Error::new(
@@ -44,7 +44,12 @@ pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
             "tray icon not found"
         )))?;
 
-    // TODO: Add red recording icon asset later
+    // Load recording icon
+    let icon_path = app_handle.path().resolve("icons/recording.png", BaseDirectory::Resource)?;
+    let icon = Image::from_path(icon_path)?;
+
+    tray.set_icon(Some(icon))?;
+    tray.set_icon_as_template(false)?; // Keep red color, don't adapt to system theme
     tray.set_tooltip(Some("StepCast - Recording..."))?;
     Ok(())
 }
@@ -57,6 +62,12 @@ pub fn set_default_icon(app_handle: &AppHandle) -> tauri::Result<()> {
             "tray icon not found"
         )))?;
 
+    // Load default icon
+    let icon_path = resolve_tray_icon_path(app_handle)?;
+    let icon = Image::from_path(icon_path)?;
+
+    tray.set_icon(Some(icon))?;
+    tray.set_icon_as_template(true)?; // Adapt to system theme
     tray.set_tooltip(Some("StepCast"))?;
     Ok(())
 }

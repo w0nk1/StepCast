@@ -13,6 +13,7 @@ use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
+use tauri_nspanel::ManagerExt;
 use base64::Engine;
 
 struct RecorderAppState {
@@ -190,14 +191,27 @@ async fn start_recording(
         .start()
         .map_err(|error| format!("{error:?}"))?;
 
-    // TODO: Hide panel and show recording indicator
-    // Temporarily disabled - causes crash
-    // if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
-    //     panel.hide();
-    // }
-    // if let Err(e) = tray::set_recording_icon(&app) {
-    //     eprintln!("Failed to set recording icon: {}", e);
-    // }
+    // Hide panel and set recording icon on main thread (required for macOS UI operations)
+    let app_clone = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if cfg!(debug_assertions) {
+            eprintln!("Hiding window for recording (main thread)...");
+        }
+
+        // Hide the window
+        if let Some(window) = app_clone.get_webview_window(panel::panel_label()) {
+            let _ = window.hide();
+        }
+
+        // Set recording icon
+        if let Err(e) = tray::set_recording_icon(&app_clone) {
+            eprintln!("Failed to set recording icon: {}", e);
+        }
+
+        if cfg!(debug_assertions) {
+            eprintln!("Recording UI updated successfully");
+        }
+    });
 
     Ok(())
 }
@@ -269,14 +283,21 @@ fn stop_recording(
         .stop()
         .map_err(|error| format!("{error:?}"))?;
 
-    // TODO: Reset tray icon and show panel
-    // Temporarily disabled - causes crash
-    // if let Err(e) = tray::set_default_icon(&app) {
-    //     eprintln!("Failed to reset tray icon: {}", e);
-    // }
-    // if let Ok(panel) = app.get_webview_panel(panel::panel_label()) {
-    //     panel.show();
-    // }
+    // Show panel and reset icon on main thread
+    let app_clone = _app.clone();
+    let _ = _app.run_on_main_thread(move || {
+        if cfg!(debug_assertions) {
+            eprintln!("Showing window after recording stopped (main thread)...");
+        }
+
+        if let Some(window) = app_clone.get_webview_window(panel::panel_label()) {
+            let _ = window.show();
+        }
+
+        if let Err(e) = tray::set_default_icon(&app_clone) {
+            eprintln!("Failed to reset tray icon: {}", e);
+        }
+    });
 
     Ok(steps)
 }
@@ -294,7 +315,10 @@ fn get_steps(state: tauri::State<'_, RecorderAppState>) -> Result<Vec<Step>, Str
 }
 
 #[tauri::command]
-fn discard_recording(state: tauri::State<'_, RecorderAppState>) -> Result<(), String> {
+fn discard_recording(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RecorderAppState>,
+) -> Result<(), String> {
     // Stop the processing loop first
     state.processing_running.store(false, Ordering::SeqCst);
 
@@ -330,6 +354,18 @@ fn discard_recording(state: tauri::State<'_, RecorderAppState>) -> Result<(), St
         // Force reset to idle state
         *recorder_state = RecorderState::new();
     }
+
+    // Show panel and reset icon on main thread after discard
+    let app_clone = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(window) = app_clone.get_webview_window(panel::panel_label()) {
+            let _ = window.show();
+        }
+
+        if let Err(e) = tray::set_default_icon(&app_clone) {
+            eprintln!("Failed to reset tray icon: {}", e);
+        }
+    });
 
     Ok(())
 }
