@@ -70,9 +70,9 @@ html, body {
   background: var(--bg-primary);
   border-radius: 12px;
   box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.08),
-    0 4px 12px rgba(0, 0, 0, 0.06),
-    0 8px 24px rgba(0, 0, 0, 0.04);
+    0 0 0 0.5px rgba(0, 0, 0, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.02);
   position: relative;
   overflow: hidden;
 }
@@ -80,9 +80,9 @@ html, body {
 @media (prefers-color-scheme: dark) {
   .panel {
     box-shadow:
-      0 0 0 0.5px rgba(255, 255, 255, 0.1),
-      0 4px 12px rgba(0, 0, 0, 0.15),
-      0 8px 24px rgba(0, 0, 0, 0.1);
+      0 0 0 0.5px rgba(255, 255, 255, 0.06),
+      0 2px 8px rgba(0, 0, 0, 0.08),
+      0 4px 16px rgba(0, 0, 0, 0.06);
   }
 }
 
