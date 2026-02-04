@@ -230,6 +230,10 @@ input::placeholder {
 
 /* Buttons */
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -239,6 +243,10 @@ input::placeholder {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+.button svg {
+  flex-shrink: 0;
 }
 
 .button:hover:not(:disabled) {
