@@ -74,6 +74,7 @@ pub fn set_default_icon(app_handle: &AppHandle) -> tauri::Result<()> {
 
 fn resolve_tray_icon_path(app_handle: &AppHandle) -> tauri::Result<PathBuf> {
     let candidates = [
+        (BaseDirectory::Resource, "icons/tray.png"),
         (BaseDirectory::Resource, "icons/icon.png"),
         (BaseDirectory::Resource, "icon.png"),
     ];
