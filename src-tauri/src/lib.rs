@@ -12,6 +12,8 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
+#[cfg(not(debug_assertions))]
+use tauri_plugin_aptabase::EventTracker;
 
 
 struct RecorderAppState {
@@ -440,6 +442,10 @@ pub fn run() {
     // Clean up leftover session directories from previous runs
     Session::cleanup_all_sessions();
 
+    // Tokio runtime required by tauri-plugin-aptabase
+    let _rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+    let _guard = _rt.enter();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -447,6 +453,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_nspanel::init())
+        .plugin(tauri_plugin_aptabase::Builder::new("A-EU-6084625392").build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -454,6 +461,10 @@ pub fn run() {
             }
             panel::init(app.handle())?;
             tray::create(app.handle())?;
+
+            #[cfg(not(debug_assertions))]
+            let _ = app.track_event("app_started", None);
+
             Ok(())
         })
         .manage(RecorderAppState {

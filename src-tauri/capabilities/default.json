@@ -26,6 +26,7 @@
     "opener:allow-reveal-item-in-dir",
     "dialog:default",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "aptabase:allow-track-event"
   ]
 }
