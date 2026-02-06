@@ -105,6 +105,13 @@ export default function RecorderPanel() {
     refreshPermissions();
   }, [refreshPermissions]);
 
+  // Poll permissions every 2s while any are missing
+  useEffect(() => {
+    if (permissionsReady) return;
+    const id = setInterval(refreshPermissions, 2000);
+    return () => clearInterval(id);
+  }, [permissionsReady, refreshPermissions]);
+
   useEffect(() => {
     check()
       .then((update) => {
