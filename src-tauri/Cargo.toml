@@ -1,0 +1,51 @@
+[package]
+name = "stepcast"
+version = "0.1.0"
+description = "StepCast - Screen Recording Step Documentation"
+authors = ["w0nk1"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "stepcast_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-macos-permissions = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+core-graphics = "0.24"
+core-foundation = "0.10"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSApplication"] }
+objc2-core-foundation = "0.3"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSError", "NSURL"] }
+objc2-web-kit = { version = "0.3", features = [
+    "WKWebView", "WKWebViewConfiguration", "WKNavigationDelegate",
+    "WKPDFConfiguration", "WKNavigation"
+] }
+base64 = "0.22"
+uuid = { version = "1.0", features = ["v4"] }
+dirs = "5.0"
+chrono = "0.4"
+accessibility-sys = "0.2"
+image = "0.25"
+slug = "0.1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"

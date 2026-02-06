@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "StepCast",
+  "version": "0.1.0",
+  "identifier": "com.stepcast.app",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "StepCast",
+        "width": 340,
+        "height": 554,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false
+      }
+    ],
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": {
+        "default-src": "'self' asset:",
+        "connect-src": "ipc: http://ipc.localhost",
+        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self'",
+        "script-src": "'self'"
+      },
+      "devCsp": {
+        "default-src": "'self' http://localhost:1420 asset:",
+        "connect-src": "ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420",
+        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "style-src": "'self' 'unsafe-inline' http://localhost:1420",
+        "script-src": "'self' 'unsafe-eval' http://localhost:1420"
+      },
+      "capabilities": ["default"],
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$HOME/Library/Caches/**", "$TEMP/**"]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/w0nk1/StepCast/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdEN0VGNDI1RUExNThDMDIKUldRQ2pCWHFKZlIrZmNXUVVtWEZKS1BIMlJxQVRNelkyZEJMWTVmdFJnY0R4dmR3ZFVoMVZxajQK"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "icons/icon.png",
+      "icons/tray.png",
+      "icons/tray@2x.png",
+      "icons/recording.png",
+      "icons/recording@2x.png",
+      "icons/stop.png",
+      "icons/stop@2x.png"
+    ]
+  }
+}

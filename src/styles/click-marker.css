@@ -1,0 +1,78 @@
+/* Shared click marker styles - used in app UI and PDF export */
+
+/* Base marker style - single click */
+.click-indicator,
+.click-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2.5px solid var(--marker-color, #ff3b30);
+  box-shadow:
+    0 0 0 1.5px rgba(255, 255, 255, 0.9),
+    0 2px 6px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Double-click marker - two concentric rings using ::after pseudo-element */
+.click-marker.double-click,
+.click-indicator.double-click {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--marker-color, #ff3b30);
+}
+
+.click-marker.double-click::after,
+.click-indicator.double-click::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--marker-color, #ff3b30);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+/* Right-click marker - dashed ring */
+.click-marker.right-click,
+.click-indicator.right-click {
+  border-style: dashed;
+  border-width: 2.5px;
+}
+
+/* Smaller markers for thumbnails in the app UI */
+.step-thumb .click-indicator,
+.step-thumb .click-marker {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.9),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.step-thumb .click-marker.double-click,
+.step-thumb .click-indicator.double-click {
+  width: 8px;
+  height: 8px;
+  border-width: 1px;
+}
+
+.step-thumb .click-marker.double-click::after,
+.step-thumb .click-indicator.double-click::after {
+  width: 14px;
+  height: 14px;
+  border-width: 1px;
+}
+
+.step-thumb .click-marker.right-click,
+.step-thumb .click-indicator.right-click {
+  border-style: dashed;
+  border-width: 1.5px;
+}
