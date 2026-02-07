@@ -88,6 +88,7 @@ export default function RecorderPanel() {
   const [updating, setUpdating] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+
   const permissionsReady = Boolean(
     permissions && permissions.screen_recording && permissions.accessibility,
   );
@@ -196,10 +197,20 @@ export default function RecorderPanel() {
     [],
   );
 
-  const handleRequestPermissions = useCallback(async () => {
+  const handleRequestScreenRecording = useCallback(async () => {
     setError(null);
     try {
-      const next = await invoke<PermissionStatus>("request_permissions");
+      const next = await invoke<PermissionStatus>("request_screen_recording");
+      setPermissions(next);
+    } catch (err) {
+      setError(String(err));
+    }
+  }, []);
+
+  const handleRequestAccessibility = useCallback(async () => {
+    setError(null);
+    try {
+      const next = await invoke<PermissionStatus>("request_accessibility");
       setPermissions(next);
     } catch (err) {
       setError(String(err));
@@ -331,19 +342,24 @@ export default function RecorderPanel() {
             </div>
             <div className="permission-row">
               <span>Screen Recording</span>
-              <span className={permissions?.screen_recording ? "pill ok" : "pill warn"}>
-                {permissions?.screen_recording ? "OK" : "Missing"}
-              </span>
+              {permissions?.screen_recording ? (
+                <span className="pill ok">OK</span>
+              ) : (
+                <button className="pill-button warn" onClick={handleRequestScreenRecording}>
+                  Open Settings
+                </button>
+              )}
             </div>
             <div className="permission-row">
               <span>Accessibility</span>
-              <span className={permissions?.accessibility ? "pill ok" : "pill warn"}>
-                {permissions?.accessibility ? "OK" : "Missing"}
-              </span>
+              {permissions?.accessibility ? (
+                <span className="pill ok">OK</span>
+              ) : (
+                <button className="pill-button warn" onClick={handleRequestAccessibility}>
+                  Open Settings
+                </button>
+              )}
             </div>
-            <button className="button ghost" onClick={handleRequestPermissions}>
-              Grant Permissions
-            </button>
           </div>
         </section>
       )}

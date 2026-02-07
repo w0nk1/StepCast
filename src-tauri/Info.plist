@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>StepCast needs screen recording access to capture screenshots of your workflow steps.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>StepCast needs audio capture access when recording screen content with audio.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>StepCast needs accessibility access to detect clicks and identify UI elements.</string>
+</dict>
+</plist>

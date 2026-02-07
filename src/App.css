@@ -285,6 +285,24 @@ input::placeholder {
   color: var(--warning);
 }
 
+.pill-button {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+.pill-button.warn {
+  background: rgba(255, 149, 0, 0.18);
+  color: var(--warning);
+}
+
+.pill-button.warn:hover {
+  background: rgba(255, 149, 0, 0.32);
+}
+
 /* Controls */
 .controls {
   display: flex;

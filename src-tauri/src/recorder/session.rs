@@ -15,7 +15,7 @@ impl Session {
         // Create temp directory for this session
         let temp_dir = dirs::cache_dir()
             .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join("com.stepcast.desktop")
+            .join("com.w0nk1.stepcast")
             .join("sessions")
             .join(&id);
 
@@ -42,7 +42,7 @@ impl Session {
         };
 
         // Session screenshot directories
-        let sessions_dir = cache.join("com.stepcast.desktop").join("sessions");
+        let sessions_dir = cache.join("com.w0nk1.stepcast").join("sessions");
         if sessions_dir.is_dir() {
             let _ = std::fs::remove_dir_all(&sessions_dir);
         }
