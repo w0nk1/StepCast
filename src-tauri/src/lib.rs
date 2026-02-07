@@ -49,8 +49,6 @@ struct PermissionStatus {
 
 const SCREEN_RECORDING_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
-const ACCESSIBILITY_SETTINGS_URL: &str =
-    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -289,8 +287,11 @@ async fn request_screen_recording(app: tauri::AppHandle) -> PermissionStatus {
         });
         let _ = rx.recv();
 
-        if let Err(err) = tauri_plugin_opener::open_url(SCREEN_RECORDING_SETTINGS_URL, None::<&str>) {
-            eprintln!("Failed to open Screen Recording settings: {err}");
+        // Only open System Settings if still not granted (avoid double dialog)
+        if !check_screen_recording() {
+            if let Err(err) = tauri_plugin_opener::open_url(SCREEN_RECORDING_SETTINGS_URL, None::<&str>) {
+                eprintln!("Failed to open Screen Recording settings: {err}");
+            }
         }
     }
 
@@ -301,6 +302,9 @@ async fn request_screen_recording(app: tauri::AppHandle) -> PermissionStatus {
 async fn request_accessibility(app: tauri::AppHandle) -> PermissionStatus {
     #[cfg(target_os = "macos")]
     {
+        // AXIsProcessTrustedWithOptions(prompt: true) shows its own native
+        // dialog with an "Open System Preferences" button — no need to also
+        // open System Settings ourselves.
         let (tx, rx) = std::sync::mpsc::channel();
         let _ = app.run_on_main_thread(move || {
             permission_debug_log("request_accessibility(main): calling AXIsProcessTrustedWithOptions");
@@ -311,10 +315,6 @@ async fn request_accessibility(app: tauri::AppHandle) -> PermissionStatus {
             let _ = tx.send(());
         });
         let _ = rx.recv();
-
-        if let Err(err) = tauri_plugin_opener::open_url(ACCESSIBILITY_SETTINGS_URL, None::<&str>) {
-            eprintln!("Failed to open Accessibility settings: {err}");
-        }
     }
 
     check_permissions().await
