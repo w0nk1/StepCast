@@ -50,11 +50,6 @@ struct PermissionStatus {
 const SCREEN_RECORDING_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {name}! You've been greeted from Rust!")
-}
-
 
 #[tauri::command]
 async fn check_permissions() -> PermissionStatus {
@@ -791,7 +786,6 @@ pub fn run() {
             processing_running: Arc::new(AtomicBool::new(false)),
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             check_permissions,
             request_screen_recording,
             request_accessibility,

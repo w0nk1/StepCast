@@ -100,7 +100,6 @@ fn default_capability_allows_app_commands() {
         "allow-get-steps",
         "allow-export-guide",
         "allow-discard-recording",
-        "allow-greet",
     ];
 
     for id in required {

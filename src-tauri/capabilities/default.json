@@ -16,7 +16,6 @@
     "allow-get-steps",
     "allow-export-guide",
     "allow-discard-recording",
-    "allow-greet",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

@@ -13,7 +13,8 @@ Download the latest release from the [Releases page](https://github.com/w0nk1/St
 - Lives in your menu bar — one click to start recording
 - Captures a screenshot on every click, with window and UI element context
 - Export as HTML, Markdown, or PDF
-- Everything stays local — no cloud, no telemetry
+- Everything stays local — no cloud, no accounts
+- Anonymous usage analytics via [Aptabase](https://aptabase.com) (release builds only)
 
 ## Contributing
 
