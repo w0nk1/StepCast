@@ -110,11 +110,6 @@ jobs:
 
           rm certificate.p12
 
-      - name: Decode provisioning profile
-        env:
-          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
-        run: echo "$APPLE_PROVISIONING_PROFILE" | base64 --decode > src-tauri/embedded.provisionprofile
-
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:
