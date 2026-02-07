@@ -91,7 +91,8 @@ fn default_capability_allows_app_commands() {
     let perm_ids: Vec<&str> = perms.iter().filter_map(|perm| perm.as_str()).collect();
     let required = [
         "allow-check-permissions",
-        "allow-request-permissions",
+        "allow-request-screen-recording",
+        "allow-request-accessibility",
         "allow-start-recording",
         "allow-pause-recording",
         "allow-resume-recording",
