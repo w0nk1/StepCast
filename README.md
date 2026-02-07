@@ -17,19 +17,7 @@ Download the latest release from the [Releases page](https://github.com/w0nk1/St
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Ideas or bugs? [Open an issue](https://github.com/w0nk1/StepCast/issues).
-
-### Stack
-
-- [Tauri 2](https://tauri.app/) / Rust
-- [React 19](https://react.dev/) + TypeScript
-
-### Development
-
-```bash
-bun install
-bun tauri dev
-```
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details, or [open an issue](https://github.com/w0nk1/StepCast/issues).
 
 ## License
 
