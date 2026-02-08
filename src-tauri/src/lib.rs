@@ -39,6 +39,7 @@ struct RecorderAppState {
     session: Mutex<Option<Session>>,
     click_listener: Mutex<Option<ClickListener>>,
     processing_running: Arc<AtomicBool>,
+    pipeline_state: Mutex<pipeline::PipelineState>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Default)]
@@ -355,11 +356,11 @@ fn process_clicks_loop(app: tauri::AppHandle, processing_running: Arc<AtomicBool
             {
                 let mut session_lock = state.session.lock().ok();
                 if let Some(ref mut session) = session_lock.as_mut().and_then(|s| s.as_mut()) {
-                    let (prompt_step, suppress_click) = pipeline::handle_auth_prompt(&click, session);
+                    let (prompt_step, suppress_click) = pipeline::handle_auth_prompt(&click, session, &state.pipeline_state);
                     auth_step = prompt_step;
 
                     if !suppress_click {
-                        if let Ok(step) = pipeline::process_click(&click, session) {
+                        if let Ok(step) = pipeline::process_click(&click, session, &state.pipeline_state) {
                             recorded_step = Some(step);
                         }
                     }
@@ -448,6 +449,12 @@ async fn start_recording(
     #[cfg(target_os = "macos")]
     probe_screen_capture();
 
+    // Reset pipeline state for the new session
+    {
+        let mut ps = state.pipeline_state.lock().map_err(|_| "pipeline state lock poisoned")?;
+        ps.reset();
+    }
+
     // Clean up previous session if any
     {
         let session_lock = state
@@ -513,7 +520,10 @@ async fn start_recording(
         if let Some(window) = app_clone.get_webview_window(panel::panel_label()) {
             let _ = window.hide();
         }
-        recorder::pipeline::set_panel_visible(false);
+        {
+            let ps_state = app_clone.state::<RecorderAppState>();
+            recorder::pipeline::set_panel_visible(&ps_state.pipeline_state, false);
+        }
 
         // Set recording icon
         if let Err(e) = tray::set_recording_icon(&app_clone) {
@@ -574,12 +584,15 @@ fn stop_recording(
         }
     }
 
-    // Get steps from session
+    // Write diagnostics and get steps from session
     let steps = {
         let session_lock = state
             .session
             .lock()
             .map_err(|_| "session lock poisoned")?;
+        if let Some(s) = session_lock.as_ref() {
+            s.write_diagnostics();
+        }
         session_lock
             .as_ref()
             .map(|s| s.get_steps().to_vec())
@@ -607,6 +620,7 @@ fn stop_recording(
             if let Err(err) = tray::position_panel_at_current_tray_icon(&app_clone) {
                 eprintln!("Failed to position panel: {err}");
             }
+            let ps_state = app_clone.state::<RecorderAppState>();
             if let Ok(bounds) = panel::panel_bounds(&app_clone) {
                 if cfg!(debug_assertions) {
                     eprintln!(
@@ -614,9 +628,9 @@ fn stop_recording(
                         bounds.x, bounds.y, bounds.width, bounds.height
                     );
                 }
-                recorder::pipeline::record_panel_bounds(bounds);
+                recorder::pipeline::record_panel_bounds(&ps_state.pipeline_state, bounds);
             }
-            recorder::pipeline::set_panel_visible(true);
+            recorder::pipeline::set_panel_visible(&ps_state.pipeline_state, true);
         }
 
         if let Err(e) = tray::set_default_icon(&app_clone) {
@@ -661,13 +675,14 @@ fn discard_recording(
         }
     }
 
-    // Clean up session temp dir and clear session
+    // Write diagnostics, then clean up session temp dir and clear session
     {
         let mut session_lock = state
             .session
             .lock()
             .map_err(|_| "session lock poisoned")?;
         if let Some(session) = session_lock.as_ref() {
+            session.write_diagnostics();
             session.cleanup();
         }
         *session_lock = None;
@@ -683,6 +698,12 @@ fn discard_recording(
         *recorder_state = RecorderState::new();
     }
 
+    // Reset pipeline state
+    {
+        let mut ps = state.pipeline_state.lock().map_err(|_| "pipeline state lock poisoned")?;
+        ps.reset();
+    }
+
     // Show panel and reset icon on main thread after discard
     let app_clone = app.clone();
     let _ = app.run_on_main_thread(move || {
@@ -691,6 +712,7 @@ fn discard_recording(
             if let Err(err) = tray::position_panel_at_current_tray_icon(&app_clone) {
                 eprintln!("Failed to position panel: {err}");
             }
+            let ps_state = app_clone.state::<RecorderAppState>();
             if let Ok(bounds) = panel::panel_bounds(&app_clone) {
                 if cfg!(debug_assertions) {
                     eprintln!(
@@ -698,9 +720,9 @@ fn discard_recording(
                         bounds.x, bounds.y, bounds.width, bounds.height
                     );
                 }
-                recorder::pipeline::record_panel_bounds(bounds);
+                recorder::pipeline::record_panel_bounds(&ps_state.pipeline_state, bounds);
             }
-            recorder::pipeline::set_panel_visible(true);
+            recorder::pipeline::set_panel_visible(&ps_state.pipeline_state, true);
         }
 
         if let Err(e) = tray::set_default_icon(&app_clone) {
@@ -766,10 +788,11 @@ pub fn run() {
                             eprintln!("Failed to position panel on launch: {err}");
                         }
                         p.show_and_make_key();
+                        let ps_state = app_inner.state::<RecorderAppState>();
                         if let Ok(bounds) = panel::panel_bounds(&app_inner) {
-                            recorder::pipeline::record_panel_bounds(bounds);
+                            recorder::pipeline::record_panel_bounds(&ps_state.pipeline_state, bounds);
                         }
-                        recorder::pipeline::set_panel_visible(true);
+                        recorder::pipeline::set_panel_visible(&ps_state.pipeline_state, true);
                     }
                 });
             });
@@ -784,6 +807,7 @@ pub fn run() {
             session: Mutex::new(None),
             click_listener: Mutex::new(None),
             processing_running: Arc::new(AtomicBool::new(false)),
+            pipeline_state: Mutex::new(pipeline::PipelineState::new()),
         })
         .invoke_handler(tauri::generate_handler![
             check_permissions,

@@ -115,6 +115,8 @@ mod tests {
             window_title: "Downloads".into(),
             screenshot_path: None,
             note: None,
+            capture_status: None,
+            capture_error: None,
         }
     }
 

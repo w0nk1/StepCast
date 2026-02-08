@@ -245,8 +245,10 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                         .map(|m| should_hide_panel(panel_visible, panel_bounds, m))
                         .unwrap_or(panel_visible);
 
+                    let ps = &app_handle.state::<crate::RecorderAppState>().pipeline_state;
                     if let Ok(ref metrics) = metrics {
                         crate::recorder::pipeline::record_tray_click(
+                            ps,
                             crate::recorder::pipeline::TrayRect {
                                 x: metrics.x,
                                 y: metrics.y,
@@ -258,7 +260,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
 
                     if should_hide {
                         panel.hide();
-                        crate::recorder::pipeline::set_panel_visible(false);
+                        crate::recorder::pipeline::set_panel_visible(ps, false);
                         return;
                     }
 
@@ -289,7 +291,8 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                                     }
                                 }
                                 if let Ok(bounds) = crate::panel::panel_bounds(&app_handle_inner) {
-                                    crate::recorder::pipeline::record_panel_bounds(bounds);
+                                    let ps_inner = &app_handle_inner.state::<crate::RecorderAppState>().pipeline_state;
+                                    crate::recorder::pipeline::record_panel_bounds(ps_inner, bounds);
                                 }
                             });
                         });
@@ -303,9 +306,9 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                         }
                     }
                     if let Ok(bounds) = crate::panel::panel_bounds(app_handle) {
-                        crate::recorder::pipeline::record_panel_bounds(bounds);
+                        crate::recorder::pipeline::record_panel_bounds(ps, bounds);
                     }
-                    crate::recorder::pipeline::set_panel_visible(true);
+                    crate::recorder::pipeline::set_panel_visible(ps, true);
                 }
             }
         })

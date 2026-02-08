@@ -11,7 +11,7 @@ use super::click_event::ClickEvent;
 use super::cg_capture::{capture_region_cg, capture_region_fast, capture_window_cg};
 use super::macos_screencapture::capture_window as capture_window_by_id;
 use super::session::Session;
-use super::types::{ActionType, Step};
+use super::types::{ActionType, CaptureStatus, Step};
 use super::window_info::{
     find_auth_dialog_window,
     find_attached_dialog_window,
@@ -41,16 +41,40 @@ const DEBOUNCE_MS: i64 = 150;
 /// and can occur with significant delay as the dialog animates closed
 const AUTH_DIALOG_COOLDOWN_MS: i64 = 800;
 
-/// Track last click for debouncing: (timestamp, x, y, click_count)
-static LAST_CLICK: Mutex<Option<(i64, i32, i32, i64)>> = Mutex::new(None);
-/// Track last auth dialog click timestamp for extended cooldown
-static LAST_AUTH_CLICK_MS: Mutex<Option<i64>> = Mutex::new(None);
-static LAST_TRAY_CLICK: Mutex<Option<TrayClick>> = Mutex::new(None);
-static PANEL_STATE: Mutex<PanelState> = Mutex::new(PanelState::new());
-static LAST_AUTH_PROMPT: Mutex<Option<(u32, i64)>> = Mutex::new(None);
-
 const TRAY_CLICK_WINDOW_MS: i64 = 1_000;
 const AUTH_PROMPT_DEDUP_MS: i64 = 5_000;
+
+/// All transient pipeline state that should be reset between recording sessions.
+///
+/// Previously these fields were file-level `static Mutex` values that persisted
+/// across sessions.  Wrapping them in a struct stored inside `RecorderAppState`
+/// lets us `reset()` cleanly on start / stop / discard.
+pub struct PipelineState {
+    /// Track last click for debouncing: (timestamp, x, y, click_count)
+    pub last_click: Option<(i64, i32, i32, i64)>,
+    /// Track last auth dialog click timestamp for extended cooldown
+    pub last_auth_click_ms: Option<i64>,
+    pub last_tray_click: Option<TrayClick>,
+    pub panel_state: PanelState,
+    pub last_auth_prompt: Option<(u32, i64)>,
+}
+
+impl PipelineState {
+    pub fn new() -> Self {
+        Self {
+            last_click: None,
+            last_auth_click_ms: None,
+            last_tray_click: None,
+            panel_state: PanelState::new(),
+            last_auth_prompt: None,
+        }
+    }
+
+    /// Reset all transient state so a new recording session starts cleanly.
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrayRect {
@@ -69,19 +93,19 @@ pub struct PanelRect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct TrayClick {
-    rect: TrayRect,
-    timestamp_ms: i64,
+pub struct TrayClick {
+    pub rect: TrayRect,
+    pub timestamp_ms: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PanelState {
-    rect: Option<PanelRect>,
-    visible: bool,
+pub struct PanelState {
+    pub rect: Option<PanelRect>,
+    pub visible: bool,
 }
 
 impl PanelState {
-    const fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             rect: None,
             visible: false,
@@ -190,12 +214,19 @@ fn capture_region_best(
     }
 }
 
-fn should_emit_auth_prompt(window_id: u32, timestamp_ms: i64) -> bool {
-    let mut last = LAST_AUTH_PROMPT.lock().unwrap_or_else(|e| e.into_inner());
-    match *last {
+/// Validate that a screenshot file exists and is non-empty.
+fn validate_screenshot(path: &Path) -> bool {
+    match std::fs::metadata(path) {
+        Ok(meta) => meta.len() > 0,
+        Err(_) => false,
+    }
+}
+
+fn should_emit_auth_prompt(ps: &mut PipelineState, window_id: u32, timestamp_ms: i64) -> bool {
+    match ps.last_auth_prompt {
         Some((prev_id, prev_ts)) if prev_id == window_id && timestamp_ms - prev_ts < AUTH_PROMPT_DEDUP_MS => false,
         _ => {
-            *last = Some((window_id, timestamp_ms));
+            ps.last_auth_prompt = Some((window_id, timestamp_ms));
             true
         }
     }
@@ -221,6 +252,7 @@ fn find_security_auth_window(
 pub fn handle_auth_prompt(
     click: &ClickEvent,
     session: &mut Session,
+    pipeline_state: &Mutex<PipelineState>,
 )-> (Option<Step>, bool) {
     let clicked_info = get_clicked_element_info(click.x, click.y);
     let auth_window = match find_security_auth_window(click.x, click.y, clicked_info.is_none()) {
@@ -229,11 +261,16 @@ pub fn handle_auth_prompt(
     };
 
     {
-        let mut last_auth = LAST_AUTH_CLICK_MS.lock().unwrap_or_else(|e| e.into_inner());
-        *last_auth = Some(click.timestamp_ms);
+        let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+        ps.last_auth_click_ms = Some(click.timestamp_ms);
     }
 
-    if !should_emit_auth_prompt(auth_window.window_id, click.timestamp_ms) {
+    let should_emit = {
+        let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+        should_emit_auth_prompt(&mut ps, auth_window.window_id, click.timestamp_ms)
+    };
+
+    if !should_emit {
         debug_log(
             session,
             &format!(
@@ -273,6 +310,8 @@ pub fn handle_auth_prompt(
         window_title: "Authentication dialog (secure)".to_string(),
         screenshot_path: Some(screenshot_path.to_string_lossy().to_string()),
         note: None,
+        capture_status: None,
+        capture_error: None,
     };
 
     debug_log(
@@ -287,28 +326,27 @@ pub fn handle_auth_prompt(
     (Some(step), true)
 }
 
-pub fn record_tray_click(rect: TrayRect) {
+pub fn record_tray_click(pipeline_state: &Mutex<PipelineState>, rect: TrayRect) {
     let timestamp_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as i64;
-    let mut last = LAST_TRAY_CLICK.lock().unwrap_or_else(|e| e.into_inner());
-    *last = Some(TrayClick { rect, timestamp_ms });
+    let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+    ps.last_tray_click = Some(TrayClick { rect, timestamp_ms });
 }
 
-pub fn record_panel_bounds(rect: PanelRect) {
-    let mut state = PANEL_STATE.lock().unwrap_or_else(|e| e.into_inner());
-    state.rect = Some(rect);
+pub fn record_panel_bounds(pipeline_state: &Mutex<PipelineState>, rect: PanelRect) {
+    let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+    ps.panel_state.rect = Some(rect);
 }
 
-pub fn set_panel_visible(visible: bool) {
-    let mut state = PANEL_STATE.lock().unwrap_or_else(|e| e.into_inner());
-    state.visible = visible;
+pub fn set_panel_visible(pipeline_state: &Mutex<PipelineState>, visible: bool) {
+    let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+    ps.panel_state.visible = visible;
 }
 
-fn should_filter_tray_click(click: &ClickEvent) -> bool {
-    let last = LAST_TRAY_CLICK.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(tray_click) = *last else {
+fn should_filter_tray_click(ps: &PipelineState, click: &ClickEvent) -> bool {
+    let Some(tray_click) = ps.last_tray_click else {
         return false;
     };
 
@@ -320,12 +358,11 @@ fn should_filter_tray_click(click: &ClickEvent) -> bool {
     tray_click.rect.contains(click.x, click.y)
 }
 
-fn should_filter_panel_click(click: &ClickEvent) -> bool {
-    let state = PANEL_STATE.lock().unwrap_or_else(|e| e.into_inner());
-    if !state.visible {
+fn should_filter_panel_click(ps: &PipelineState, click: &ClickEvent) -> bool {
+    if !ps.panel_state.visible {
         return false;
     }
-    let Some(rect) = state.rect else {
+    let Some(rect) = ps.panel_state.rect else {
         return false;
     };
     rect.contains(click.x, click.y)
@@ -450,8 +487,8 @@ fn find_context_menu_near_click(click_x: i32, click_y: i32, app_name: &str) -> O
             None => continue,
         };
 
-        // Context menus are typically narrow (< 400px) and tall
-        if bounds.width > 400 || bounds.width < 50 || bounds.height < 50 {
+        // Context menus are typically narrow, but Finder menus can reach ~500px
+        if bounds.width > 600 || bounds.width < 50 || bounds.height < 50 {
             continue;
         }
 
@@ -512,17 +549,15 @@ impl std::error::Error for PipelineError {}
 
 /// Check if click should be debounced (too close in time/position to previous)
 /// Returns (should_debounce, should_upgrade_previous) - upgrade means replace last Click with DoubleClick
-fn is_debounced(timestamp_ms: i64, x: i32, y: i32, click_count: i64) -> (bool, bool) {
-    let mut last = LAST_CLICK.lock().unwrap_or_else(|e| e.into_inner());
-
-    if let Some((last_ts, last_x, last_y, last_count)) = *last {
+fn is_debounced(ps: &mut PipelineState, timestamp_ms: i64, x: i32, y: i32, click_count: i64) -> (bool, bool) {
+    if let Some((last_ts, last_x, last_y, last_count)) = ps.last_click {
         let time_diff = timestamp_ms - last_ts;
         let same_position = (x - last_x).abs() < 5 && (y - last_y).abs() < 5;
 
         // If this is a double-click (click_count=2) at the same position, signal upgrade
         if same_position && click_count > last_count && time_diff < 500 {
             // Update with new click_count
-            *last = Some((timestamp_ms, x, y, click_count));
+            ps.last_click = Some((timestamp_ms, x, y, click_count));
             return (false, true); // Don't debounce, but upgrade previous step
         }
 
@@ -533,7 +568,7 @@ fn is_debounced(timestamp_ms: i64, x: i32, y: i32, click_count: i64) -> (bool, b
     }
 
     // Update last click
-    *last = Some((timestamp_ms, x, y, click_count));
+    ps.last_click = Some((timestamp_ms, x, y, click_count));
     (false, false)
 }
 
@@ -565,7 +600,7 @@ impl From<CaptureError> for PipelineError {
 /// # Returns
 ///
 /// Returns the created Step on success, or a PipelineError if any step fails.
-pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, PipelineError> {
+pub fn process_click(click: &ClickEvent, session: &mut Session, pipeline_state: &Mutex<PipelineState>) -> Result<Step, PipelineError> {
     debug_log(
         session,
         &format!(
@@ -574,16 +609,21 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
         ),
     );
 
-    // Filter clicks on our panel
-    if should_filter_panel_click(click) {
-        debug_log(session, "filtered: panel click");
-        return Err(PipelineError::OwnAppClick);
-    }
+    session.diagnostics.clicks_received += 1;
 
-    // Filter clicks on our tray icon
-    if should_filter_tray_click(click) {
-        debug_log(session, "filtered: tray click");
-        return Err(PipelineError::OwnAppClick);
+    // Filter clicks on our panel / tray icon
+    {
+        let ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+        if should_filter_panel_click(&ps, click) {
+            debug_log(session, "filtered: panel click");
+            session.diagnostics.clicks_filtered += 1;
+            return Err(PipelineError::OwnAppClick);
+        }
+        if should_filter_tray_click(&ps, click) {
+            debug_log(session, "filtered: tray click");
+            session.diagnostics.clicks_filtered += 1;
+            return Err(PipelineError::OwnAppClick);
+        }
     }
 
     // 0a. Get info about the actual clicked element
@@ -621,12 +661,16 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
             if cfg!(debug_assertions) {
                 eprintln!("Filtered own app click at ({}, {}): {clicked_app} (PID {clicked_pid})", click.x, click.y);
             }
+            session.diagnostics.clicks_filtered += 1;
             return Err(PipelineError::OwnAppClick);
         }
     }
 
     // 0c. Debounce rapid duplicate clicks (but allow double-click upgrades)
-    let (should_debounce, should_upgrade) = is_debounced(click.timestamp_ms, click.x, click.y, click.click_count);
+    let (should_debounce, should_upgrade) = {
+        let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+        is_debounced(&mut ps, click.timestamp_ms, click.x, click.y, click.click_count)
+    };
 
     if should_upgrade {
         // This is a double-click - upgrade the previous step
@@ -647,13 +691,14 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
         if cfg!(debug_assertions) {
             eprintln!("Debounced click at ({}, {})", click.x, click.y);
         }
+        session.diagnostics.clicks_filtered += 1;
         return Err(PipelineError::DebouncedClick);
     }
 
     // 0d. Check cooldown after auth dialog clicks (phantom click prevention)
     {
-        let last_auth = LAST_AUTH_CLICK_MS.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(last_ts) = *last_auth {
+        let ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(last_ts) = ps.last_auth_click_ms {
             let time_since_auth = click.timestamp_ms - last_ts;
             if time_since_auth > 0 && time_since_auth < AUTH_DIALOG_COOLDOWN_MS {
                 debug_log(
@@ -666,6 +711,7 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
                         click.x, click.y
                     );
                 }
+                session.diagnostics.clicks_filtered += 1;
                 return Err(PipelineError::DebouncedClick);
             }
         }
@@ -713,8 +759,8 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
 
     // Record auth dialog click timestamp for phantom click prevention
     if is_auth_dialog {
-        let mut last_auth = LAST_AUTH_CLICK_MS.lock().unwrap_or_else(|e| e.into_inner());
-        *last_auth = Some(click.timestamp_ms);
+        let mut ps = pipeline_state.lock().unwrap_or_else(|e| e.into_inner());
+        ps.last_auth_click_ms = Some(click.timestamp_ms);
     }
 
     // Fast-path for sheet dialog button clicks: capture immediately around the click.
@@ -852,6 +898,8 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
             window_title,
             screenshot_path: Some(screenshot_path.to_string_lossy().to_string()),
             note: None,
+            capture_status: Some(CaptureStatus::Ok),
+            capture_error: None,
         };
 
         session.add_step(step.clone());
@@ -1071,8 +1119,13 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
         if cfg!(debug_assertions) {
             eprintln!("Filtered click on StepCast app");
         }
+        session.diagnostics.clicks_filtered += 1;
         return Err(PipelineError::DebouncedClick);
     }
+
+    // Track capture outcome across all branches
+    let mut final_capture_status = CaptureStatus::Ok;
+    let mut final_capture_error: Option<String> = None;
 
     // 3. Capture screenshot - special handling for Dock, auth dialogs, then windows
     let (click_x_percent, click_y_percent) = if is_dock_click {
@@ -1235,6 +1288,8 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
                 window_title: resolved_window_title,
                 screenshot_path: Some(screenshot_path.to_string_lossy().to_string()),
                 note: None,
+                capture_status: Some(CaptureStatus::Ok),
+                capture_error: None,
             };
             session.add_step(step.clone());
             return Ok(step);
@@ -1244,15 +1299,36 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
         let is_popup_menu = capture_window.window_title.is_empty()
             && capture_window.window_id != window_info.window_id;
 
-        // For right-clicks, look for context menu that may have appeared
+        // For right-clicks, poll for the context menu to appear.
+        // macOS renders context menus asynchronously; a single fixed delay
+        // sometimes captures before the menu is visible.  We poll a few
+        // times with short sleeps (total max ~250ms) so the screenshot
+        // reliably includes the menu.
         let is_right_click = matches!(click.button, super::click_event::MouseButton::Right);
         let context_menu_bounds = if is_right_click && !is_popup_menu {
-            // Delay to let context menu appear (100ms should be enough for macOS)
-            std::thread::sleep(std::time::Duration::from_millis(100));
             if cfg!(debug_assertions) {
                 eprintln!("Looking for context menu near click ({}, {}) for app '{}'", click.x, click.y, &capture_window.app_name);
             }
-            find_context_menu_near_click(click.x, click.y, &capture_window.app_name)
+            let mut found = None;
+            for attempt in 0..5 {
+                std::thread::sleep(std::time::Duration::from_millis(if attempt == 0 { 80 } else { 40 }));
+                found = find_context_menu_near_click(click.x, click.y, &capture_window.app_name);
+                if found.is_some() {
+                    debug_log(
+                        session,
+                        &format!("context_menu found on attempt {}", attempt + 1),
+                    );
+                    // Let the menu finish its open animation before measuring final bounds.
+                    // Finder menus can be slow to populate (Quick Actions, extensions …).
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    // Re-measure — the menu may have grown during its animation
+                    if let Some(refreshed) = find_context_menu_near_click(click.x, click.y, &capture_window.app_name) {
+                        found = Some(refreshed);
+                    }
+                    break;
+                }
+            }
+            found
         } else {
             None
         };
@@ -1294,15 +1370,18 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
             }
             (true, union_bounds)
         } else if let Some(ref menu_bounds) = context_menu_bounds {
-            // Right-click with context menu found - include both window and menu
+            // Right-click with context menu found - include both window and menu.
+            // Add generous padding around the menu to account for macOS drop shadows
+            // (~20-30px) and items that may render beyond reported window bounds.
+            const MENU_PAD: i32 = 50;
             let main = &capture_window.bounds;
 
-            let union_x = main.x.min(menu_bounds.x);
-            let union_y = main.y.min(menu_bounds.y);
+            let union_x = main.x.min(menu_bounds.x - MENU_PAD);
+            let union_y = main.y.min(menu_bounds.y - MENU_PAD);
             let union_right =
-                (main.x + main.width as i32).max(menu_bounds.x + menu_bounds.width as i32);
+                (main.x + main.width as i32).max(menu_bounds.x + menu_bounds.width as i32 + MENU_PAD);
             let union_bottom =
-                (main.y + main.height as i32).max(menu_bounds.y + menu_bounds.height as i32);
+                (main.y + main.height as i32).max(menu_bounds.y + menu_bounds.height as i32 + MENU_PAD);
 
             let union_bounds = super::window_info::WindowBounds {
                 x: union_x,
@@ -1466,7 +1545,10 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
         // For normal window captures (no popup/context menu), try window-ID capture first.
         // This avoids race conditions where the window closes before the region capture
         // (e.g., clicking a close button). Fall back to region capture on failure.
-        let mut used_window_capture = false;
+        let mut capture_ok = false;
+        let mut used_fallback = false;
+        let mut last_capture_err: Option<String> = None;
+
         if !use_region_capture && context_menu_bounds.is_none() && capture_window.window_id > 0 {
             if cfg!(debug_assertions) {
                 eprintln!(
@@ -1477,12 +1559,19 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
                 );
             }
             match capture_window_cg(capture_window.window_id, &screenshot_path) {
-                Ok(()) => {
+                Ok(()) if validate_screenshot(&screenshot_path) => {
                     debug_log(
                         session,
                         &format!("window_id_capture ok: id={}", capture_window.window_id),
                     );
-                    used_window_capture = true;
+                    capture_ok = true;
+                }
+                Ok(()) => {
+                    debug_log(
+                        session,
+                        &format!("window_id_capture produced empty file, falling back to region"),
+                    );
+                    last_capture_err = Some("window capture produced empty file".to_string());
                 }
                 Err(err) => {
                     if cfg!(debug_assertions) {
@@ -1492,11 +1581,12 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
                         session,
                         &format!("window_id_capture failed: {err}, falling back to region"),
                     );
+                    last_capture_err = Some(format!("{err}"));
                 }
             }
         }
 
-        if !used_window_capture {
+        if !capture_ok {
             if cfg!(debug_assertions) {
                 eprintln!(
                     "Region capture: bounds=({}, {}, {}x{}) popup={}",
@@ -1505,15 +1595,52 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
                     use_region_capture
                 );
             }
-            capture_region_best(
+            match capture_region_best(
                 session,
                 actual_bounds.x,
                 actual_bounds.y,
                 actual_bounds.width as i32,
                 actual_bounds.height as i32,
                 &screenshot_path,
-            )
-            .map_err(|e| PipelineError::ScreenshotFailed(format!("{e}")))?;
+            ) {
+                Ok(()) if validate_screenshot(&screenshot_path) => {
+                    if last_capture_err.is_some() {
+                        used_fallback = true;
+                    }
+                    capture_ok = true;
+                }
+                Ok(()) => {
+                    debug_log(session, "region_capture produced empty file");
+                    last_capture_err = Some(last_capture_err.unwrap_or_default()
+                        + "; region capture produced empty file");
+                }
+                Err(e) => {
+                    debug_log(session, &format!("region_capture failed: {e}"));
+                    let msg = format!("{e}");
+                    last_capture_err = Some(
+                        last_capture_err
+                            .map(|prev| format!("{prev}; {msg}"))
+                            .unwrap_or(msg),
+                    );
+                }
+            }
+        }
+
+        // Record capture outcome
+        if capture_ok && used_fallback {
+            final_capture_status = CaptureStatus::Fallback;
+            final_capture_error = last_capture_err.clone();
+            session.diagnostics.captures_fallback += 1;
+            if let Some(ref reason) = last_capture_err {
+                session.diagnostics.failure_reasons.push(reason.clone());
+            }
+        } else if !capture_ok {
+            final_capture_status = CaptureStatus::Failed;
+            final_capture_error = last_capture_err.clone();
+            session.diagnostics.captures_failed += 1;
+            if let Some(ref reason) = last_capture_err {
+                session.diagnostics.failure_reasons.push(reason.clone());
+            }
         }
 
         if cfg!(debug_assertions) {
@@ -1657,6 +1784,11 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
     };
 
     // 7. Create step
+    let screenshot = if final_capture_status == CaptureStatus::Failed {
+        None
+    } else {
+        Some(screenshot_path.to_string_lossy().to_string())
+    };
     let step = Step {
         id: step_id,
         ts: click.timestamp_ms,
@@ -1667,11 +1799,13 @@ pub fn process_click(click: &ClickEvent, session: &mut Session) -> Result<Step, 
         click_y_percent: click_y_percent as f32,
         app: actual_app_name,
         window_title: resolved_window_title,
-        screenshot_path: Some(screenshot_path.to_string_lossy().to_string()),
+        screenshot_path: screenshot,
         note: None,
+        capture_status: Some(final_capture_status),
+        capture_error: final_capture_error,
     };
 
-    // 7. Add to session
+    // 8. Add to session
     session.add_step(step.clone());
 
     Ok(step)
@@ -1701,6 +1835,7 @@ fn calculate_click_percent(click_coord: i32, window_offset: i32, window_size: i3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::recorder::click_event::{ClickEvent, MouseButton};
 
     #[test]
     fn calculate_click_percent_at_origin() {
@@ -1815,64 +1950,232 @@ mod tests {
 
     #[test]
     fn first_click_is_not_debounced() {
-        // Reset the static
-        *LAST_CLICK.lock().unwrap() = None;
-        let (debounced, upgrade) = is_debounced(1000, 100, 200, 1);
+        let mut ps = PipelineState::new();
+        let (debounced, upgrade) = is_debounced(&mut ps, 1000, 100, 200, 1);
         assert!(!debounced);
         assert!(!upgrade);
     }
 
     #[test]
     fn same_position_within_threshold_is_debounced() {
-        *LAST_CLICK.lock().unwrap() = None;
-        is_debounced(1000, 100, 200, 1);
-        let (debounced, upgrade) = is_debounced(1050, 102, 201, 1);
+        let mut ps = PipelineState::new();
+        is_debounced(&mut ps, 1000, 100, 200, 1);
+        let (debounced, upgrade) = is_debounced(&mut ps, 1050, 102, 201, 1);
         assert!(debounced);
         assert!(!upgrade);
     }
 
     #[test]
     fn same_position_after_threshold_is_not_debounced() {
-        *LAST_CLICK.lock().unwrap() = None;
-        is_debounced(1000, 100, 200, 1);
-        let (debounced, upgrade) = is_debounced(1200, 102, 201, 1);
+        let mut ps = PipelineState::new();
+        is_debounced(&mut ps, 1000, 100, 200, 1);
+        let (debounced, upgrade) = is_debounced(&mut ps, 1200, 102, 201, 1);
         assert!(!debounced);
         assert!(!upgrade);
     }
 
     #[test]
     fn different_position_within_threshold_is_not_debounced() {
-        *LAST_CLICK.lock().unwrap() = None;
-        is_debounced(1000, 100, 200, 1);
-        let (debounced, upgrade) = is_debounced(1050, 200, 300, 1);
+        let mut ps = PipelineState::new();
+        is_debounced(&mut ps, 1000, 100, 200, 1);
+        let (debounced, upgrade) = is_debounced(&mut ps, 1050, 200, 300, 1);
         assert!(!debounced);
         assert!(!upgrade);
     }
 
     #[test]
     fn double_click_upgrades_previous() {
-        *LAST_CLICK.lock().unwrap() = None;
-        is_debounced(1000, 100, 200, 1);
-        let (debounced, upgrade) = is_debounced(1100, 101, 201, 2);
+        let mut ps = PipelineState::new();
+        is_debounced(&mut ps, 1000, 100, 200, 1);
+        let (debounced, upgrade) = is_debounced(&mut ps, 1100, 101, 201, 2);
         assert!(!debounced);
         assert!(upgrade);
     }
 
     #[test]
     fn double_click_at_different_position_does_not_upgrade() {
-        *LAST_CLICK.lock().unwrap() = None;
-        is_debounced(1000, 100, 200, 1);
-        let (debounced, upgrade) = is_debounced(1100, 200, 300, 2);
+        let mut ps = PipelineState::new();
+        is_debounced(&mut ps, 1000, 100, 200, 1);
+        let (debounced, upgrade) = is_debounced(&mut ps, 1100, 200, 300, 2);
         assert!(!debounced);
         assert!(!upgrade);
     }
 
     #[test]
     fn double_click_after_timeout_does_not_upgrade() {
-        *LAST_CLICK.lock().unwrap() = None;
-        is_debounced(1000, 100, 200, 1);
-        let (debounced, upgrade) = is_debounced(1600, 101, 201, 2);
+        let mut ps = PipelineState::new();
+        is_debounced(&mut ps, 1000, 100, 200, 1);
+        let (debounced, upgrade) = is_debounced(&mut ps, 1600, 101, 201, 2);
         assert!(!debounced);
         assert!(!upgrade);
+    }
+
+    // --- PipelineState::reset ---
+
+    #[test]
+    fn pipeline_state_reset_clears_all() {
+        let mut ps = PipelineState::new();
+        ps.last_click = Some((1000, 100, 200, 1));
+        ps.last_auth_click_ms = Some(500);
+        ps.last_tray_click = Some(TrayClick {
+            rect: TrayRect { x: 0, y: 0, width: 30, height: 22 },
+            timestamp_ms: 999,
+        });
+        ps.panel_state.visible = true;
+        ps.panel_state.rect = Some(PanelRect { x: 50, y: 30, width: 340, height: 554 });
+        ps.last_auth_prompt = Some((42, 1000));
+
+        ps.reset();
+
+        assert!(ps.last_click.is_none());
+        assert!(ps.last_auth_click_ms.is_none());
+        assert!(ps.last_tray_click.is_none());
+        assert!(!ps.panel_state.visible);
+        assert!(ps.panel_state.rect.is_none());
+        assert!(ps.last_auth_prompt.is_none());
+    }
+
+    // --- Negative coordinates (multi-monitor) ---
+
+    #[test]
+    fn calculate_click_percent_negative_offsets() {
+        // Secondary monitor left of primary: window at x=-1440, click at x=-720
+        let percent = calculate_click_percent(-720, -1440, 1440);
+        assert!((percent - 50.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn debounce_handles_negative_coords() {
+        let mut ps = PipelineState::new();
+        let (d, u) = is_debounced(&mut ps, 1000, -500, -200, 1);
+        assert!(!d);
+        assert!(!u);
+        // Same position within threshold
+        let (d2, _) = is_debounced(&mut ps, 1050, -498, -199, 1);
+        assert!(d2);
+    }
+
+    // --- should_filter_tray_click with PipelineState ---
+
+    #[test]
+    fn filter_tray_click_within_window() {
+        let mut ps = PipelineState::new();
+        ps.last_tray_click = Some(TrayClick {
+            rect: TrayRect { x: 100, y: 0, width: 30, height: 22 },
+            timestamp_ms: 1000,
+        });
+        let click = ClickEvent {
+            x: 115,
+            y: 11,
+            button: MouseButton::Left,
+            click_count: 1,
+            timestamp_ms: 1500,
+        };
+        assert!(should_filter_tray_click(&ps, &click));
+    }
+
+    #[test]
+    fn filter_tray_click_expired() {
+        let mut ps = PipelineState::new();
+        ps.last_tray_click = Some(TrayClick {
+            rect: TrayRect { x: 100, y: 0, width: 30, height: 22 },
+            timestamp_ms: 1000,
+        });
+        let click = ClickEvent {
+            x: 115,
+            y: 11,
+            button: MouseButton::Left,
+            click_count: 1,
+            timestamp_ms: 3000, // > 1s after tray click
+        };
+        assert!(!should_filter_tray_click(&ps, &click));
+    }
+
+    // --- should_filter_panel_click with PipelineState ---
+
+    #[test]
+    fn filter_panel_click_visible() {
+        let mut ps = PipelineState::new();
+        ps.panel_state.visible = true;
+        ps.panel_state.rect = Some(PanelRect { x: 50, y: 30, width: 340, height: 554 });
+        let click = ClickEvent {
+            x: 200,
+            y: 300,
+            button: MouseButton::Left,
+            click_count: 1,
+            timestamp_ms: 1000,
+        };
+        assert!(should_filter_panel_click(&ps, &click));
+    }
+
+    #[test]
+    fn filter_panel_click_hidden() {
+        let mut ps = PipelineState::new();
+        ps.panel_state.visible = false;
+        ps.panel_state.rect = Some(PanelRect { x: 50, y: 30, width: 340, height: 554 });
+        let click = ClickEvent {
+            x: 200,
+            y: 300,
+            button: MouseButton::Left,
+            click_count: 1,
+            timestamp_ms: 1000,
+        };
+        assert!(!should_filter_panel_click(&ps, &click));
+    }
+
+    // --- should_emit_auth_prompt dedup ---
+
+    #[test]
+    fn auth_prompt_first_emission() {
+        let mut ps = PipelineState::new();
+        assert!(should_emit_auth_prompt(&mut ps, 42, 1000));
+        assert_eq!(ps.last_auth_prompt, Some((42, 1000)));
+    }
+
+    #[test]
+    fn auth_prompt_dedup_same_window_within_cooldown() {
+        let mut ps = PipelineState::new();
+        assert!(should_emit_auth_prompt(&mut ps, 42, 1000));
+        // Same window, within AUTH_PROMPT_DEDUP_MS (5000ms)
+        assert!(!should_emit_auth_prompt(&mut ps, 42, 3000));
+    }
+
+    #[test]
+    fn auth_prompt_emits_after_cooldown() {
+        let mut ps = PipelineState::new();
+        assert!(should_emit_auth_prompt(&mut ps, 42, 1000));
+        // Same window, after AUTH_PROMPT_DEDUP_MS
+        assert!(should_emit_auth_prompt(&mut ps, 42, 7000));
+    }
+
+    #[test]
+    fn auth_prompt_emits_for_different_window() {
+        let mut ps = PipelineState::new();
+        assert!(should_emit_auth_prompt(&mut ps, 42, 1000));
+        // Different window ID, even within cooldown
+        assert!(should_emit_auth_prompt(&mut ps, 99, 2000));
+    }
+
+    // --- validate_screenshot ---
+
+    #[test]
+    fn validate_screenshot_nonexistent() {
+        assert!(!validate_screenshot(Path::new("/tmp/definitely_not_a_real_file_xyz.png")));
+    }
+
+    #[test]
+    fn validate_screenshot_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.png");
+        std::fs::write(&path, b"").unwrap();
+        assert!(!validate_screenshot(&path));
+    }
+
+    #[test]
+    fn validate_screenshot_valid_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("valid.png");
+        std::fs::write(&path, b"PNG data here").unwrap();
+        assert!(validate_screenshot(&path));
     }
 }

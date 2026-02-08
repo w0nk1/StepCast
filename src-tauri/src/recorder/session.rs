@@ -1,11 +1,29 @@
 use super::types::Step;
+use serde::Serialize;
 use std::path::PathBuf;
 use uuid::Uuid;
+
+/// Lightweight diagnostics collected during a recording session.
+/// Written to `diagnostics.json` in the session cache on stop/discard.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SessionDiagnostics {
+    /// Total clicks received (before filtering).
+    pub clicks_received: u32,
+    /// Clicks dropped by debounce / own-app / tray / panel filters.
+    pub clicks_filtered: u32,
+    /// Capture attempts that used a fallback path.
+    pub captures_fallback: u32,
+    /// Capture attempts that failed entirely (step recorded without screenshot).
+    pub captures_failed: u32,
+    /// Per-failure reasons, in order of occurrence.
+    pub failure_reasons: Vec<String>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Session {
     pub steps: Vec<Step>,
     pub temp_dir: PathBuf,
+    pub diagnostics: SessionDiagnostics,
 }
 
 impl Session {
@@ -24,6 +42,7 @@ impl Session {
         Ok(Self {
             steps: Vec::new(),
             temp_dir,
+            diagnostics: SessionDiagnostics::default(),
         })
     }
 
@@ -73,6 +92,21 @@ impl Session {
     pub fn screenshot_path(&self, step_id: &str) -> PathBuf {
         self.temp_dir.join(format!("{step_id}.png"))
     }
+
+    /// Write diagnostics.json to the session cache directory.
+    pub fn write_diagnostics(&self) {
+        let path = self.temp_dir.join("diagnostics.json");
+        match serde_json::to_string_pretty(&self.diagnostics) {
+            Ok(json) => {
+                let _ = std::fs::write(path, json);
+            }
+            Err(e) => {
+                if cfg!(debug_assertions) {
+                    eprintln!("Failed to serialize diagnostics: {e}");
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -94,6 +128,31 @@ mod tests {
 
         session.add_step(Step::sample());
         assert_eq!(session.next_step_id(), "step-002");
+
+        // Cleanup
+        std::fs::remove_dir_all(&session.temp_dir).ok();
+    }
+
+    #[test]
+    fn write_diagnostics_creates_json() {
+        let mut session = Session::new().expect("create session");
+        session.diagnostics.clicks_received = 10;
+        session.diagnostics.clicks_filtered = 3;
+        session.diagnostics.captures_fallback = 1;
+        session.diagnostics.captures_failed = 0;
+        session.diagnostics.failure_reasons.push("window capture produced empty file".into());
+
+        session.write_diagnostics();
+
+        let path = session.temp_dir.join("diagnostics.json");
+        assert!(path.exists());
+        let contents = std::fs::read_to_string(&path).expect("read diagnostics.json");
+        let parsed: serde_json::Value = serde_json::from_str(&contents).expect("parse json");
+        assert_eq!(parsed["clicks_received"], 10);
+        assert_eq!(parsed["clicks_filtered"], 3);
+        assert_eq!(parsed["captures_fallback"], 1);
+        assert_eq!(parsed["captures_failed"], 0);
+        assert_eq!(parsed["failure_reasons"][0], "window capture produced empty file");
 
         // Cleanup
         std::fs::remove_dir_all(&session.temp_dir).ok();

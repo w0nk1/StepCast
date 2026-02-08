@@ -9,6 +9,17 @@ pub enum ActionType {
     Note,
 }
 
+/// Status of the screenshot capture for a step.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CaptureStatus {
+    /// Capture succeeded normally.
+    Ok,
+    /// Primary capture failed, but fallback succeeded.
+    Fallback,
+    /// All capture attempts failed – step recorded without a screenshot.
+    Failed,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Step {
     pub id: String,
@@ -22,6 +33,12 @@ pub struct Step {
     pub window_title: String,
     pub screenshot_path: Option<String>,
     pub note: Option<String>,
+    /// How the screenshot capture resolved.  `None` for legacy steps.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_status: Option<CaptureStatus>,
+    /// Human-readable reason when capture_status is Fallback or Failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_error: Option<String>,
 }
 
 #[cfg(test)]
@@ -39,6 +56,8 @@ impl Step {
             window_title: "Downloads".to_string(),
             screenshot_path: Some("screenshots/step-001.png".to_string()),
             note: None,
+            capture_status: None,
+            capture_error: None,
         }
     }
 }

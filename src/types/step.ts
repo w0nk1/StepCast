@@ -1,5 +1,7 @@
 export type ActionType = "Click" | "DoubleClick" | "RightClick" | "Shortcut" | "Note";
 
+export type CaptureStatus = "Ok" | "Fallback" | "Failed";
+
 export interface Step {
   id: string;
   ts: number;
@@ -12,4 +14,6 @@ export interface Step {
   window_title: string;
   screenshot_path: string | null;
   note: string | null;
+  capture_status?: CaptureStatus | null;
+  capture_error?: string | null;
 }
