@@ -124,8 +124,8 @@ jobs:
           tauriScript: npx tauri
           tagName: ${{ steps.tag.outputs.version }}
           releaseName: "StepCast ${{ steps.tag.outputs.version }}"
-          releaseBody: "See the [changelog](https://github.com/w0nk1/StepCast/blob/main/CHANGELOG.md) for details."
-          releaseDraft: false
+          releaseBody: ""
+          releaseDraft: true
           prerelease: false
           args: "--target ${{ matrix.target }}"
 
