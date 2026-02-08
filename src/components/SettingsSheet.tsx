@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -15,8 +16,6 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
   { value: "dark", label: "Dark" },
   { value: "system", label: "System" },
 ];
-
-const APP_VERSION = "0.1.0";
 
 function applyTheme(theme: Theme) {
   if (theme === "system") {
@@ -38,8 +37,13 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem("theme") as Theme) || "system"
   );
+  const [appVersion, setAppVersion] = useState("");
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    getVersion().then(setAppVersion);
+  }, []);
 
   const selectTheme = useCallback((t: Theme) => {
     setTheme(t);
@@ -117,7 +121,7 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
         <div className="settings-section">
           <div className="settings-label">Updates</div>
           <div className="settings-row">
-            <span className="muted">Version {APP_VERSION}</span>
+            <span className="muted">Version {appVersion}</span>
           </div>
           {updateStatus === "available" && updateVersion ? (
             <button className="button primary" onClick={handleInstallUpdate}>

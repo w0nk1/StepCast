@@ -29,6 +29,10 @@ afterEach(() => {
 
 // --- Tauri core mocks ---
 
+vi.mock("@tauri-apps/api/app", () => ({
+  getVersion: vi.fn(() => Promise.resolve("0.2.0")),
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
   convertFileSrc: vi.fn((path: string) => `asset://localhost/${path}`),

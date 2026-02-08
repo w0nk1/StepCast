@@ -64,9 +64,9 @@ describe("SettingsSheet", () => {
     expect(localStorage.getItem("theme")).toBe("system");
   });
 
-  it("shows version number", () => {
+  it("shows version number from Tauri API", async () => {
     render(<SettingsSheet onBack={vi.fn()} />);
-    expect(screen.getByText("Version 0.1.0")).toBeInTheDocument();
+    expect(await screen.findByText("Version 0.2.0")).toBeInTheDocument();
   });
 
   it("checks for updates and shows up-to-date", async () => {

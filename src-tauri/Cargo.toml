@@ -1,6 +1,6 @@
 [package]
 name = "stepcast"
-version = "0.2.0"
+version = "0.2.1"
 description = "StepCast - Screen Recording Step Documentation"
 authors = ["w0nk1"]
 edition = "2021"
