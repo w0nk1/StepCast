@@ -42,9 +42,14 @@ pub fn show_panel(app_handle: &AppHandle) {
         return;
     };
     panel.show_and_make_key();
-    if let Err(err) = position_panel_at_current_tray_icon(app_handle) {
-        eprintln!("Failed to position panel: {err}");
+    let is_fallback = position_panel_at_current_tray_icon(app_handle).is_err();
+    if is_fallback {
+        eprintln!("Tray position unavailable, using fallback");
+        if let Err(fb_err) = crate::panel::fallback_panel_position(app_handle) {
+            eprintln!("Fallback position also failed: {fb_err}");
+        }
     }
+    let _ = app_handle.emit("panel-positioned", !is_fallback);
     if let Ok(bounds) = crate::panel::panel_bounds(app_handle) {
         let ps = &app_handle.state::<crate::RecorderAppState>().pipeline_state;
         crate::recorder::pipeline::record_panel_bounds(ps, bounds);
@@ -306,11 +311,14 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                     }
 
                     panel.show_and_make_key();
-                    if let Err(err) =
-                        position_panel_at_tray_icon(app_handle, effective_rect.position, effective_rect.size)
-                    {
-                        eprintln!("Failed to position panel: {err}");
+                    let click_is_fallback = position_panel_at_tray_icon(app_handle, effective_rect.position, effective_rect.size).is_err();
+                    if click_is_fallback {
+                        eprintln!("Tray position unavailable on click, using fallback");
+                        if let Err(fb_err) = crate::panel::fallback_panel_position(app_handle) {
+                            eprintln!("Fallback position also failed: {fb_err}");
+                        }
                     }
+                    let _ = app_handle.emit("panel-positioned", !click_is_fallback);
                     // Reposition shortly after showing to account for late size updates
                     {
                         let app_handle = app_handle.clone();
@@ -321,7 +329,10 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                             let app_handle_inner = app_handle.clone();
                             let _ = app_handle.run_on_main_thread(move || {
                                 if let Err(err) = position_panel_at_tray_icon(&app_handle_inner, position, size) {
-                                    eprintln!("Failed to reposition panel: {err}");
+                                    eprintln!("Delayed reposition failed ({err}), using fallback");
+                                    if let Err(fb_err) = crate::panel::fallback_panel_position(&app_handle_inner) {
+                                        eprintln!("Fallback position also failed: {fb_err}");
+                                    }
                                 }
                                 if cfg!(debug_assertions) {
                                     if let Ok(bounds) = crate::panel::panel_bounds(&app_handle_inner) {

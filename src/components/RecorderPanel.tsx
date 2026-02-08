@@ -93,6 +93,7 @@ export default function RecorderPanel() {
   const [showSettings, setShowSettings] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [whatsNew, setWhatsNew] = useState<string | null>(null);
+  const [showNotch, setShowNotch] = useState(true);
 
   const permissionsReady = Boolean(
     permissions && permissions.screen_recording && permissions.accessibility,
@@ -140,6 +141,22 @@ export default function RecorderPanel() {
     let cancelled = false;
     listen("show-quick-start", () => {
       setShowWelcome(true);
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // Listen for panel positioning mode (tray vs fallback)
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+    let cancelled = false;
+    listen<boolean>("panel-positioned", (event) => {
+      setShowNotch(event.payload);
     }).then((fn) => {
       if (cancelled) fn();
       else unlisten = fn;
@@ -338,7 +355,7 @@ export default function RecorderPanel() {
   }
 
   return (
-    <main className={`panel${isIdle ? "" : " panel-full"}`}>
+    <main className={`panel${isIdle ? "" : " panel-full"}${showNotch ? "" : " no-notch"}`}>
       {/* Header */}
       <header className="panel-header">
         <h1 className="panel-title">StepCast</h1>
@@ -356,6 +373,14 @@ export default function RecorderPanel() {
           </button>
         </div>
       </header>
+
+      {/* Fallback hint when tray icon is hidden */}
+      {!showNotch && (
+        <div className="fallback-hint">
+          <span>Tray icon hidden by another app — use <kbd>Cmd+Shift+S</kbd> to toggle</span>
+          <button onClick={() => setShowNotch(true)} title="Dismiss">&times;</button>
+        </div>
+      )}
 
       {/* Update banner */}
       {updateAvailable && (

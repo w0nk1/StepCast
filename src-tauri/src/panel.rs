@@ -186,6 +186,36 @@ pub fn panel_bounds(app_handle: &AppHandle) -> Result<crate::recorder::pipeline:
     })
 }
 
+/// Fallback position when tray icon location is unavailable (e.g. Menu Bar Hider).
+/// Places the panel at the top-right of the primary monitor, just below the menu bar.
+pub fn fallback_panel_position(app_handle: &AppHandle) -> Result<(), String> {
+    let window = app_handle
+        .get_webview_window(PANEL_LABEL)
+        .ok_or_else(|| "panel window missing".to_string())?;
+
+    let monitor = window
+        .primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no primary monitor".to_string())?;
+
+    let scale = monitor.scale_factor();
+    let screen_size = monitor.size();
+    let screen_pos = monitor.position();
+    let window_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    // Menu bar height: ~24pt on standard, ~37pt on notch displays
+    let menu_bar_gap = (38.0 * scale).round() as i32;
+    let padding_right = (12.0 * scale).round() as i32;
+
+    let panel_x =
+        screen_pos.x + screen_size.width as i32 - window_size.width as i32 - padding_right;
+    let panel_y = screen_pos.y + menu_bar_gap;
+
+    window
+        .set_position(tauri::PhysicalPosition::new(panel_x, panel_y))
+        .map_err(|e| e.to_string())
+}
+
 pub fn position_panel_at_tray_icon(
     app_handle: &AppHandle,
     icon_position: Position,
