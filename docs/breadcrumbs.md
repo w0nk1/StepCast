@@ -45,3 +45,9 @@
 - Fix: tray toggle listens on MouseButtonState::Up to avoid double events and ensure show/hide.
 - Fix: panel allows key window and uses show_and_make_key on tray click to ensure visibility.
 - Debug: compared OpenUsage panel/tray implementation; aligned panel level, style mask, collection behavior, and show-before-position behavior.
+
+2026-02-08
+- Bug: WhatsApp GIF picker screenshot shows main chat instead of picker overlay.
+- Root cause: `get_topmost_window_at_point` returns the Dock's full-screen overlay (layer=20, 2560x1080) as topmost for ALL clicks. Pipeline correctly rejects it as system UI, but falls back to the main window — never sees the GIF picker underneath.
+- Fix 1: skip system UI windows inside `get_topmost_window_at_point` (window_info.rs) so the next real app window (e.g. GIF picker) is returned.
+- Fix 2: track `capture_from_topmost` flag in pipeline.rs; when true, don't replace overlay with main window in reconciliation block (defense-in-depth).

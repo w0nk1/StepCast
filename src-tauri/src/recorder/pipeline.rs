@@ -950,6 +950,11 @@ pub fn process_click(click: &ClickEvent, session: &mut Session, pipeline_state: 
         );
     }
 
+    // Track whether capture_window came from topmost overlay detection.
+    // When true, don't replace it in the clicked-app reconciliation block —
+    // the overlay (e.g. GIF picker, popup) is the correct capture target.
+    let mut capture_from_topmost = false;
+
     let capture_window = if is_auth_dialog {
         // For auth dialogs, prefer heuristic window, fallback to named security agent window
         if let Some(auth_window) = auth_window.clone() {
@@ -1024,6 +1029,7 @@ pub fn process_click(click: &ClickEvent, session: &mut Session, pipeline_state: 
         let is_menu_popup = same_app && topmost.window_title.is_empty() && topmost_area < main_area;
 
         if !is_system_ui && is_reasonable_size && (is_regular_same_app_window || is_menu_popup) {
+            capture_from_topmost = true;
             if cfg!(debug_assertions) {
                 eprintln!(
                     "Using clicked window for capture: '{}' - '{}' (id={}, {}x{})",
@@ -1049,9 +1055,11 @@ pub fn process_click(click: &ClickEvent, session: &mut Session, pipeline_state: 
     // Use clicked element's app name if available, otherwise captured window's app.
     // When the click targets a different app than the frontmost, also resolve that app's
     // main window so the capture bounds and screenshot match the actual click target.
+    // EXCEPTION: when capture_window came from topmost overlay detection (e.g. GIF picker,
+    // popup panel), keep it — the overlay is the correct capture target.
     let mut capture_window = capture_window;
     let (actual_app_name, mut actual_window_title) = if let Some((clicked_pid, ref clicked_app)) = clicked_info {
-        if clicked_app.to_lowercase() != capture_window.app_name.to_lowercase() {
+        if clicked_app.to_lowercase() != capture_window.app_name.to_lowercase() && !capture_from_topmost {
             // Try to find the clicked app's main window for correct capture bounds
             if let Some(clicked_window) = get_main_window_for_pid(clicked_pid, clicked_app) {
                 if cfg!(debug_assertions) {
@@ -1073,6 +1081,20 @@ pub fn process_click(click: &ClickEvent, session: &mut Session, pipeline_state: 
             } else {
                 (clicked_app.clone(), format!("Click on {clicked_app}"))
             }
+        } else if capture_from_topmost && clicked_app.to_lowercase() != capture_window.app_name.to_lowercase() {
+            // Topmost overlay from different app: keep capture window, use clicked_app for label
+            if cfg!(debug_assertions) {
+                eprintln!(
+                    "Keeping topmost overlay for capture (clicked_app='{}' != capture='{}')",
+                    clicked_app, capture_window.app_name
+                );
+            }
+            let title = if capture_window.window_title.is_empty() {
+                format!("Click on {clicked_app}")
+            } else {
+                capture_window.window_title.clone()
+            };
+            (clicked_app.clone(), title)
         } else {
             (capture_window.app_name.clone(), capture_window.window_title.clone())
         }

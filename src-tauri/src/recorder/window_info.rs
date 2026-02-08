@@ -1153,6 +1153,18 @@ pub fn get_topmost_window_at_point(click_x: i32, click_y: i32) -> Option<WindowI
                 .unwrap_or_else(|| "Unknown".to_string())
         };
 
+        // Skip system UI windows (Dock, Spotlight, etc.) — they have full-screen
+        // overlay windows at high layers that shadow real app windows beneath.
+        if super::ax_helpers::is_system_ui_process(&app_name) {
+            if cfg!(debug_assertions) {
+                eprintln!(
+                    "Skipping system UI window at click: '{app_name}' id={window_id} layer={layer} bounds=({}, {}, {}x{})",
+                    bounds.x, bounds.y, bounds.width, bounds.height
+                );
+            }
+            continue;
+        }
+
         // Get window title
         let title_key = CFString::new("kCGWindowName");
         let window_title = dict
@@ -1401,5 +1413,25 @@ mod tests {
         assert!(window_is_recent(&cache, 1, 1200, &cfg));
         assert!(!window_is_recent(&cache, 2, 1200, &cfg));
         assert!(window_is_recent(&cache, 3, 1200, &cfg));
+    }
+
+    // Regression: get_topmost_window_at_point must skip system UI windows (Dock, etc.)
+    // so overlay windows like GIF pickers are found instead of being shadowed.
+    // We can't call get_topmost_window_at_point in a unit test (needs live CGWindows),
+    // but we verify the filter function correctly identifies system UI processes.
+    #[test]
+    fn system_ui_filter_catches_dock() {
+        assert!(super::super::ax_helpers::is_system_ui_process("Dock"));
+        assert!(super::super::ax_helpers::is_system_ui_process("dock"));
+        assert!(super::super::ax_helpers::is_system_ui_process("WindowServer"));
+        assert!(super::super::ax_helpers::is_system_ui_process("SystemUIServer"));
+        assert!(super::super::ax_helpers::is_system_ui_process("ControlCenter"));
+    }
+
+    #[test]
+    fn system_ui_filter_allows_normal_apps() {
+        assert!(!super::super::ax_helpers::is_system_ui_process("WhatsApp"));
+        assert!(!super::super::ax_helpers::is_system_ui_process("Safari"));
+        assert!(!super::super::ax_helpers::is_system_ui_process("Finder"));
     }
 }
