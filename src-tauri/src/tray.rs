@@ -2,9 +2,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tauri::image::Image;
 use tauri::path::BaseDirectory;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent, TrayIconId};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_nspanel::ManagerExt;
 
 use crate::panel::{panel_label, position_panel_at_tray_icon};
@@ -34,6 +34,37 @@ macro_rules! get_or_init_panel {
             }
         }
     }};
+}
+
+/// Show the panel positioned at the tray icon. Used by tray menu and global shortcut.
+pub fn show_panel(app_handle: &AppHandle) {
+    let Some(panel) = get_or_init_panel!(app_handle) else {
+        return;
+    };
+    panel.show_and_make_key();
+    if let Err(err) = position_panel_at_current_tray_icon(app_handle) {
+        eprintln!("Failed to position panel: {err}");
+    }
+    if let Ok(bounds) = crate::panel::panel_bounds(app_handle) {
+        let ps = &app_handle.state::<crate::RecorderAppState>().pipeline_state;
+        crate::recorder::pipeline::record_panel_bounds(ps, bounds);
+    }
+    let ps = &app_handle.state::<crate::RecorderAppState>().pipeline_state;
+    crate::recorder::pipeline::set_panel_visible(ps, true);
+}
+
+/// Toggle panel visibility. Used by global shortcut handler.
+pub fn toggle_panel(app_handle: &AppHandle) {
+    let Some(panel) = get_or_init_panel!(app_handle) else {
+        return;
+    };
+    let ps = &app_handle.state::<crate::RecorderAppState>().pipeline_state;
+    if panel.is_visible() {
+        panel.hide();
+        crate::recorder::pipeline::set_panel_visible(ps, false);
+    } else {
+        show_panel(app_handle);
+    }
 }
 
 fn should_toggle_panel(button: MouseButton, state: MouseButtonState) -> bool {
@@ -188,8 +219,11 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let tray_icon_path = resolve_tray_icon_path(app_handle)?;
     let icon = Image::from_path(tray_icon_path)?;
 
+    let open = MenuItem::with_id(app_handle, "open", "Open StepCast", true, None::<&str>)?;
+    let quick_start = MenuItem::with_id(app_handle, "quick_start", "Quick Start", true, None::<&str>)?;
+    let sep = PredefinedMenuItem::separator(app_handle)?;
     let quit = MenuItem::with_id(app_handle, "quit", "Quit StepCast", true, None::<&str>)?;
-    let menu = Menu::with_items(app_handle, &[&quit])?;
+    let menu = Menu::with_items(app_handle, &[&open, &quick_start, &sep, &quit])?;
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
@@ -197,8 +231,15 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .menu(&menu)
         .on_menu_event(|app_handle, event| {
-            if event.id() == "quit" {
-                app_handle.exit(0);
+            let id = event.id().0.as_str();
+            match id {
+                "open" => show_panel(app_handle),
+                "quick_start" => {
+                    show_panel(app_handle);
+                    let _ = app_handle.emit("show-quick-start", ());
+                }
+                "quit" => app_handle.exit(0),
+                _ => {}
             }
         })
         .tooltip("StepCast")

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { save, ask } from "@tauri-apps/plugin-dialog";
 import { check } from "@tauri-apps/plugin-updater";
@@ -7,6 +8,8 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import StepItem from "./StepItem";
 import ExportSheet from "./ExportSheet";
 import SettingsSheet from "./SettingsSheet";
+import WelcomeBanner from "./WelcomeBanner";
+import ReleaseNotes from "./ReleaseNotes";
 import type { Step } from "../types/step";
 
 const SettingsIcon = () => (
@@ -85,9 +88,11 @@ export default function RecorderPanel() {
   const [showExportSheet, setShowExportSheet] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const [updateNotes, setUpdateNotes] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [whatsNew, setWhatsNew] = useState<string | null>(null);
 
   const permissionsReady = Boolean(
     permissions && permissions.screen_recording && permissions.accessibility,
@@ -113,11 +118,44 @@ export default function RecorderPanel() {
     return () => clearInterval(id);
   }, [permissionsReady, refreshPermissions]);
 
+  // Load startup state: show welcome for first-run, detect post-update
+  useEffect(() => {
+    Promise.all([
+      invoke<{ has_launched_before: boolean; last_seen_version: string | null }>("get_startup_state"),
+      getVersion(),
+    ])
+      .then(([state, currentVersion]) => {
+        if (!state.has_launched_before) {
+          setShowWelcome(true);
+        } else if (state.last_seen_version && state.last_seen_version !== currentVersion) {
+          setWhatsNew(currentVersion);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Listen for "Quick Start" tray menu event
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+    let cancelled = false;
+    listen("show-quick-start", () => {
+      setShowWelcome(true);
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   useEffect(() => {
     check()
       .then((update) => {
         if (update?.available) {
           setUpdateAvailable(update.version);
+          if (update.body) setUpdateNotes(update.body);
         }
       })
       .catch(() => {
@@ -322,14 +360,35 @@ export default function RecorderPanel() {
       {/* Update banner */}
       {updateAvailable && (
         <div className="update-banner">
-          <span>v{updateAvailable} available</span>
-          <button
-            className="button ghost"
-            onClick={handleUpdate}
-            disabled={updating}
-          >
-            {updating ? "Updating..." : "Install"}
-          </button>
+          <div className="update-banner-header">
+            <span>v{updateAvailable} available</span>
+            <button
+              className="button ghost"
+              onClick={handleUpdate}
+              disabled={updating}
+            >
+              {updating ? "Updating..." : "Install"}
+            </button>
+          </div>
+          {updateNotes && <ReleaseNotes body={updateNotes} />}
+        </div>
+      )}
+
+      {/* What's New banner (after update) */}
+      {whatsNew && !showWelcome && (
+        <div className="update-banner">
+          <div className="update-banner-header">
+            <span>Updated to v{whatsNew}</span>
+            <button
+              className="button ghost"
+              onClick={() => {
+                invoke("dismiss_whats_new").catch(() => {});
+                setWhatsNew(null);
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
@@ -362,6 +421,11 @@ export default function RecorderPanel() {
             </div>
           </div>
         </section>
+      )}
+
+      {/* Welcome Banner (first run or Quick Start) */}
+      {showWelcome && isIdle && (
+        <WelcomeBanner onDismiss={() => setShowWelcome(false)} />
       )}
 
       {/* Idle State */}

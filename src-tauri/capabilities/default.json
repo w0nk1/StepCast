@@ -16,6 +16,10 @@
     "allow-get-steps",
     "allow-export-guide",
     "allow-discard-recording",
+    "allow-get-startup-state",
+    "allow-mark-startup-seen",
+    "allow-dismiss-whats-new",
+    "global-shortcut:default",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

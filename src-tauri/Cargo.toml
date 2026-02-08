@@ -30,14 +30,15 @@ tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "da9c9a
 core-graphics = "0.24"
 core-foundation = "0.10"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSApplication"] }
+objc2-app-kit = { version = "0.3", features = ["NSWorkspace", "NSRunningApplication", "NSApplication", "NSImage", "NSBitmapImageRep", "NSImageRep"] }
 objc2-core-foundation = "0.3"
 block2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSError", "NSURL"] }
+objc2-foundation = { version = "0.3", features = ["NSData", "NSString", "NSError", "NSURL", "NSDictionary", "NSObject", "NSValue"] }
 objc2-web-kit = { version = "0.3", features = [
     "WKWebView", "WKWebViewConfiguration", "WKNavigationDelegate",
     "WKPDFConfiguration", "WKNavigation"
 ] }
+objc2-pdf-kit = { version = "0.3", features = ["PDFDocument", "PDFPage", "objc2-app-kit"] }
 base64 = "0.22"
 uuid = { version = "1.0", features = ["v4"] }
 dirs = "5.0"
@@ -47,6 +48,7 @@ image = "0.25"
 slug = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-aptabase = { git = "https://github.com/aptabase/tauri-plugin-aptabase", rev = "e896cce" }
+tauri-plugin-global-shortcut = "2"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 libc = "0.2"
 

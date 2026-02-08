@@ -32,6 +32,27 @@
 - Default: export templates minimal HTML/Markdown with only title placeholder; reason: task scope requires title only and avoids extra styling.
 - Default: exclude .vscode recommendations from commit unless requested; reason: editor-specific and not required for build.
 
+2026-02-08 (startup-ux)
+- Default: NO auto-show panel on any launch (first or subsequent); reason: plan explicitly requires non-window hint only.
+- Default: persist startup state as JSON in config_dir/com.w0nk1.stepcast; reason: reuse existing dirs + serde_json deps, no new dependency.
+- Default: global shortcut Cmd+Shift+S to toggle panel; reason: fallback for menu-bar-hider apps; common macOS convention.
+- Default: first-run hint = temporary Dock icon via ActivationPolicy::Regular; reason: visible, no extra permission needed, switches to Accessory on "Got it".
+- Default: tray menu: "Open StepCast", "Quick Start", separator, "Quit StepCast"; reason: discoverable access to panel and tutorial.
+
+2026-02-08 (release-notes)
+- Default: combination approach — update prompt shows release notes body + post-update "What's New" banner; reason: covers both pre-update and post-update discovery.
+- Default: store last_seen_version in startup_state.json; reason: reuses existing persistence, detects version change on launch.
+
+2026-02-08 (export-webp)
+- Default: convert export screenshots to WebP with PNG fallback; reason: WebP ~30-60% smaller, image crate 0.25 supports it natively.
+- Default: only use WebP if smaller than PNG; reason: for tiny images WebP overhead can exceed PNG, so keep whichever is smaller.
+- Default: capture storage stays PNG; conversion only at export time; reason: PNG is lossless source of truth, WebP conversion is a one-way optimization.
+
+2026-02-08 (pdf-optimization)
+- Default: PDFKit post-processing with best-effort fallback to original bytes; reason: if PDFDocument init or dataRepresentationWithOptions fails, export still succeeds with unoptimized PDF.
+- Default: skip createLinearizedPDFOption; reason: not exposed in objc2-pdf-kit bindings.
+- Default: optimize_pdf_bytes is a pure helper (bytes in, bytes out); reason: easy to unit test, no file I/O coupling.
+
 2026-02-08 (smoothness review)
 - Default: package manager = npm; reason: CI already uses npm ci, wider contributor compat, one lockfile.
 - Default: pin git deps (tauri-nspanel da9c9a8, tauri-plugin-aptabase e896cce) to commit SHAs; reason: reproducible builds, update quarterly.

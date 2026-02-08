@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod panel;
 mod recorder;
+mod startup_state;
 mod tray;
 mod export;
 use recorder::click_listener::ClickListener;
@@ -12,7 +13,6 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
-use tauri_nspanel::ManagerExt;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_aptabase::EventTracker;
 
@@ -749,6 +749,32 @@ async fn export_guide(
     export::export(&title, &steps, fmt, &output_path, &app)
 }
 
+#[tauri::command]
+fn get_startup_state() -> startup_state::StartupState {
+    startup_state::load()
+}
+
+#[tauri::command]
+fn mark_startup_seen(app: tauri::AppHandle) -> Result<(), String> {
+    let mut state = startup_state::load();
+    state.has_launched_before = true;
+    state.last_seen_version = Some(env!("CARGO_PKG_VERSION").to_string());
+    startup_state::save(&state)?;
+
+    // Switch from Regular (Dock visible) to Accessory (menu bar only)
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn dismiss_whats_new() -> Result<(), String> {
+    let mut state = startup_state::load();
+    state.last_seen_version = Some(env!("CARGO_PKG_VERSION").to_string());
+    startup_state::save(&state)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _recorder = recorder::Recorder::new();
@@ -768,34 +794,35 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_nspanel::init())
         .plugin(tauri_plugin_aptabase::Builder::new("A-EU-6084625392").build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
+            let startup = startup_state::load();
+
             #[cfg(target_os = "macos")]
             {
-                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                if startup.has_launched_before {
+                    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                } else {
+                    // First run: keep Regular so Dock icon is visible as a hint
+                    app.set_activation_policy(tauri::ActivationPolicy::Regular);
+                }
             }
+
             panel::init(app.handle())?;
             tray::create(app.handle())?;
 
-            // Auto-show panel on launch so new users see it immediately
-            let app_handle = app.handle().clone();
-            std::thread::spawn(move || {
-                // Brief delay to let the tray icon settle and report its rect
-                std::thread::sleep(std::time::Duration::from_millis(300));
-                let app_inner = app_handle.clone();
-                let _ = app_handle.run_on_main_thread(move || {
-                    if let Ok(p) = app_inner.get_webview_panel(panel::panel_label()) {
-                        if let Err(err) = tray::position_panel_at_current_tray_icon(&app_inner) {
-                            eprintln!("Failed to position panel on launch: {err}");
-                        }
-                        p.show_and_make_key();
-                        let ps_state = app_inner.state::<RecorderAppState>();
-                        if let Ok(bounds) = panel::panel_bounds(&app_inner) {
-                            recorder::pipeline::record_panel_bounds(&ps_state.pipeline_state, bounds);
-                        }
-                        recorder::pipeline::set_panel_visible(&ps_state.pipeline_state, true);
+            // Register global shortcut Cmd+Shift+S to toggle panel
+            {
+                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+                let shortcut = Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyS);
+                if let Err(err) = app.global_shortcut().on_shortcut(shortcut, |app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        tray::toggle_panel(app);
                     }
-                });
-            });
+                }) {
+                    eprintln!("Failed to register global shortcut: {err}");
+                }
+            }
 
             #[cfg(not(debug_assertions))]
             let _ = app.track_event("app_started", None);
@@ -820,9 +847,19 @@ pub fn run() {
             get_steps,
             export_guide,
             discard_recording,
+            get_startup_state,
+            mark_startup_seen,
+            dismiss_whats_new,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                // Dock icon clicked — show the panel
+                tray::show_panel(app_handle);
+            }
+        });
 }
 
 #[cfg(test)]

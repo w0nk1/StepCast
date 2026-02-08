@@ -657,8 +657,8 @@ button:focus, button:focus-visible {
 /* Error Banner */
 .update-banner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
   background: rgba(124, 92, 252, 0.1);
   color: var(--accent);
   border: 1px solid rgba(124, 92, 252, 0.25);
@@ -666,6 +666,40 @@ button:focus, button:focus-visible {
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 500;
+}
+
+.update-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.release-notes {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.release-notes ul {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.release-notes li {
+  margin: 2px 0;
+}
+
+.release-notes p {
+  margin: 4px 0 0;
+}
+
+.release-notes strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .update-banner .button {
@@ -749,6 +783,51 @@ button:focus, button:focus-visible {
   width: 1px;
   height: 12px;
   background: var(--border);
+}
+
+/* Welcome Banner */
+.welcome-banner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.welcome-tips {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.welcome-tips kbd {
+  display: inline-block;
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.welcome-dismiss {
+  align-self: flex-end;
+  font-size: 12px;
+  padding: 6px 14px;
 }
 
 .error-banner {

@@ -1,12 +1,17 @@
 use crate::recorder::types::{ActionType, Step};
-use super::helpers::{action_description, html_escape, is_auth_placeholder, load_screenshot_base64};
+use super::helpers::{action_description, html_escape, is_auth_placeholder, load_screenshot_optimized, ImageTarget};
 
 /// Generate a self-contained HTML document from steps.
 pub fn generate(title: &str, steps: &[Step]) -> String {
+    generate_for(title, steps, ImageTarget::Web)
+}
+
+/// Generate HTML with a specific image target (Web = WebP, Pdf = JPEG).
+pub fn generate_for(title: &str, steps: &[Step], target: ImageTarget) -> String {
     let steps_html: String = steps
         .iter()
         .enumerate()
-        .map(|(i, step)| render_step(i + 1, step))
+        .map(|(i, step)| render_step(i + 1, step, target))
         .collect();
 
     format!(
@@ -33,12 +38,12 @@ pub fn generate(title: &str, steps: &[Step]) -> String {
     )
 }
 
-fn render_step(num: usize, step: &Step) -> String {
+fn render_step(num: usize, step: &Step, target: ImageTarget) -> String {
     let desc = html_escape(&action_description(step));
 
     let image_html = step.screenshot_path.as_ref()
-        .and_then(|p| load_screenshot_base64(p))
-        .map(|b64| format!(r#"<img src="data:image/png;base64,{b64}" alt="Step {num}">"#))
+        .and_then(|p| load_screenshot_optimized(p, target))
+        .map(|(b64, mime)| format!(r#"<img src="data:{mime};base64,{b64}" alt="Step {num}">"#))
         .unwrap_or_default();
 
     let marker_class = match step.action {
@@ -206,5 +211,68 @@ mod tests {
         let html = generate("<script>alert(1)</script>", &[]);
         assert!(!html.contains("<script>"));
         assert!(html.contains("&lt;script&gt;"));
+    }
+
+    /// E2E: PDF target uses JPEG data URIs
+    #[test]
+    fn generate_for_pdf_uses_jpeg() {
+        use super::super::helpers::ImageTarget;
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+        let mut img = image::RgbaImage::new(100, 100);
+        for pixel in img.pixels_mut() {
+            *pixel = image::Rgba([200, 100, 50, 255]);
+        }
+        let img_path = tmp.path().join("screenshot.png");
+        img.save(&img_path).unwrap();
+
+        let mut step = sample_step();
+        step.screenshot_path = Some(img_path.to_str().unwrap().to_string());
+
+        let html = generate_for("Test", &[step], ImageTarget::Pdf);
+        assert!(
+            html.contains("data:image/jpeg;base64,"),
+            "PDF target should use JPEG data URI"
+        );
+        assert!(
+            !html.contains("data:image/webp;base64,"),
+            "PDF target should not contain WebP"
+        );
+    }
+
+    /// E2E: realistic screenshot → HTML with WebP data URI
+    #[test]
+    fn generate_uses_webp_for_real_screenshot() {
+        use tempfile::TempDir;
+
+        let tmp = TempDir::new().unwrap();
+
+        // Create a 1440x900 gradient screenshot
+        let mut img = image::RgbaImage::new(1440, 900);
+        for (x, y, pixel) in img.enumerate_pixels_mut() {
+            *pixel = image::Rgba([
+                ((x * 255) / 1440) as u8,
+                ((y * 255) / 900) as u8,
+                128, 255,
+            ]);
+        }
+        let img_path = tmp.path().join("screenshot.png");
+        img.save(&img_path).unwrap();
+
+        let mut step = sample_step();
+        step.screenshot_path = Some(img_path.to_str().unwrap().to_string());
+
+        let html = generate("Test", &[step]);
+
+        // Should embed as WebP, not PNG
+        assert!(
+            html.contains("data:image/webp;base64,"),
+            "Expected WebP data URI in HTML output"
+        );
+        assert!(
+            !html.contains("data:image/png;base64,"),
+            "Should not contain PNG data URI when WebP is smaller"
+        );
     }
 }

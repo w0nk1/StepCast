@@ -47,6 +47,7 @@
 - Debug: compared OpenUsage panel/tray implementation; aligned panel level, style mask, collection behavior, and show-before-position behavior.
 
 2026-02-08
+- PDF optimization: adding PDFKit post-processing (Approach B) on top of existing JPEG data URIs (Approach A). Helper `optimize_pdf_bytes` in pdf.rs applies saveAllImagesAsJPEG + optimizeImagesForScreen via objc2-pdf-kit, best-effort fallback to original bytes.
 - Bug: WhatsApp GIF picker screenshot shows main chat instead of picker overlay.
 - Root cause: `get_topmost_window_at_point` returns the Dock's full-screen overlay (layer=20, 2560x1080) as topmost for ALL clicks. Pipeline correctly rejects it as system UI, but falls back to the main window — never sees the GIF picker underneath.
 - Fix 1: skip system UI windows inside `get_topmost_window_at_point` (window_info.rs) so the next real app window (e.g. GIF picker) is returned.
@@ -56,3 +57,11 @@
 - Frontend: zero console.*, zero TODOs, zero any types, 100% component test coverage — excellent shape.
 - Rust: zero production panics, all eprintln guarded by debug_assertions, proper Result types throughout — solid.
 - Produced 9-item prioritized backlog (B1-B9) with effort estimates.
+- Startup UX: wrote spec (docs/specs/2026-02-08-startup-ux.md), created startup_state.rs module with load/save + 4 unit tests.
+- Startup UX: gating auto-show behind has_launched_before; adding global shortcut (Cmd+Shift+S), tray menu items, tutorial banner.
+- Startup UX: removed auto-show entirely per plan; implemented Dock icon hint via ActivationPolicy::Regular on first run.
+- Startup UX: regenerated icon assets with full-bleed gradient (no transparent corners) for proper macOS squircle mask.
+- Release notes: added last_seen_version to startup_state, update prompt now shows body text, What's New banner after version change.
+- Export WebP: added to_webp_or_png() + load_screenshot_optimized() helpers; HTML export uses dynamic MIME; Markdown export converts + writes correct extension.
+- Export WebP: removed unused load_screenshot_base64; all 142 Rust + 75 frontend tests pass; clippy clean.
+- PDF compression research: WKWebView.createPDF() has zero compression controls; WebP not in PDF spec (re-encoded to lossless = bloat); PDFKit macOS 13+ has saveAllImagesAsJPEG + optimizeImagesForScreen write options; Quartz filters work but need raw FFI; best approach = JPEG data URIs for PDF export + optional PDFKit post-processing. Spec at docs/specs/pdf-compression.md.
