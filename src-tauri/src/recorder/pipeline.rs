@@ -1591,7 +1591,7 @@ pub fn process_click(click: &ClickEvent, session: &mut Session, pipeline_state: 
                 Ok(()) => {
                     debug_log(
                         session,
-                        &format!("window_id_capture produced empty file, falling back to region"),
+                        "window_id_capture produced empty file, falling back to region",
                     );
                     last_capture_err = Some("window capture produced empty file".to_string());
                 }
