@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { type ReactElement, useMemo } from "react";
 
 /** Render release-notes markdown as clean, user-friendly HTML.
  *  Supports: bullet lists (`- ` / `* `), **bold**, headings (stripped to bold),
@@ -15,7 +15,7 @@ type NoteElement =
   | { type: "paragraph"; text: string }
   | { type: "list"; items: string[] };
 
-function parseNotes(raw: string): JSX.Element[] {
+function parseNotes(raw: string): ReactElement[] {
   const lines = raw.split("\n");
   const blocks: NoteElement[] = [];
   let currentList: string[] | null = null;

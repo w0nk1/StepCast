@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-steps"
+description = "Enables the get_steps command without any pre-configured scope."
+commands.allow = ["get_steps"]
+
+[[permission]]
+identifier = "deny-get-steps"
+description = "Denies the get_steps command without any pre-configured scope."
+commands.deny = ["get_steps"]

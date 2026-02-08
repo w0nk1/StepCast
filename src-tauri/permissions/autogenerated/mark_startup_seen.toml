@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mark-startup-seen"
+description = "Enables the mark_startup_seen command without any pre-configured scope."
+commands.allow = ["mark_startup_seen"]
+
+[[permission]]
+identifier = "deny-mark-startup-seen"
+description = "Denies the mark_startup_seen command without any pre-configured scope."
+commands.deny = ["mark_startup_seen"]

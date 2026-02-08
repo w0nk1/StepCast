@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-export-guide"
+description = "Enables the export_guide command without any pre-configured scope."
+commands.allow = ["export_guide"]
+
+[[permission]]
+identifier = "deny-export-guide"
+description = "Denies the export_guide command without any pre-configured scope."
+commands.deny = ["export_guide"]
