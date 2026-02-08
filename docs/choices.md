@@ -31,3 +31,11 @@
 - Default: tray icon resolve order = Resource icons/icon.png -> Resource icon.png -> App icons/icon.png -> App icon.png; reason: cover dev/prod bundle layouts with explicit NotFound error.
 - Default: export templates minimal HTML/Markdown with only title placeholder; reason: task scope requires title only and avoids extra styling.
 - Default: exclude .vscode recommendations from commit unless requested; reason: editor-specific and not required for build.
+
+2026-02-08 (smoothness review)
+- Default: package manager = npm; reason: CI already uses npm ci, wider contributor compat, one lockfile.
+- Default: pin git deps (tauri-nspanel da9c9a8, tauri-plugin-aptabase e896cce) to commit SHAs; reason: reproducible builds, update quarterly.
+- Default: skip ESLint/Prettier; reason: TS strict mode suffices, small team, zero code quality issues found. Revisit when team >2.
+- Default: skip structured logging (log/tracing crates); reason: custom debug_log() + conditional eprintln! is sufficient for current scale.
+- Default: add cargo-audit + npm audit to CI; reason: catch known vulnerabilities early.
+- Default: keep stale worktrees (codex/fast-capture, codex/permission-gate-settings); reason: branches have unmerged work.

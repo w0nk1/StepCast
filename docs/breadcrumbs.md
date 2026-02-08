@@ -51,3 +51,8 @@
 - Root cause: `get_topmost_window_at_point` returns the Dock's full-screen overlay (layer=20, 2560x1080) as topmost for ALL clicks. Pipeline correctly rejects it as system UI, but falls back to the main window — never sees the GIF picker underneath.
 - Fix 1: skip system UI windows inside `get_topmost_window_at_point` (window_info.rs) so the next real app window (e.g. GIF picker) is returned.
 - Fix 2: track `capture_from_topmost` flag in pipeline.rs; when true, don't replace overlay with main window in reconciliation block (defense-in-depth).
+- Smoothness review: audited full codebase (22 Rust files, 18 frontend files, CI, docs). Report at docs/plans/2026-02-08-smoothness-review.md.
+- Key findings: mixed pkg manager (npm+bun), unpinned git deps, pipeline.rs 2203 LOC / window_info.rs 1437 LOC exceed 400-LOC guideline, 6+ stale plans in docs/.
+- Frontend: zero console.*, zero TODOs, zero any types, 100% component test coverage — excellent shape.
+- Rust: zero production panics, all eprintln guarded by debug_assertions, proper Result types throughout — solid.
+- Produced 9-item prioritized backlog (B1-B9) with effort estimates.
