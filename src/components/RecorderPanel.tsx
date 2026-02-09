@@ -3,8 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { save, ask } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import StepItem from "./StepItem";
 import ExportSheet from "./ExportSheet";
 import SettingsSheet from "./SettingsSheet";
@@ -50,6 +53,19 @@ const ExportIcon = () => (
   </svg>
 );
 
+const EditIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+  </svg>
+);
+
 type PermissionStatus = {
   screen_recording: boolean;
   accessibility: boolean;
@@ -86,6 +102,7 @@ export default function RecorderPanel() {
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [showExportSheet, setShowExportSheet] = useState(false);
+  const [showNewMenu, setShowNewMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const [updateNotes, setUpdateNotes] = useState<string | null>(null);
@@ -219,6 +236,29 @@ export default function RecorderPanel() {
     };
   }, []);
 
+  // Sync step changes from editor window / backend events
+  useEffect(() => {
+    const unlisteners: UnlistenFn[] = [];
+
+    listen<Step>("step-updated", (event) => {
+      setSteps((prev) =>
+        prev.map((s) => (s.id === event.payload.id ? event.payload : s)),
+      );
+    }).then((fn) => unlisteners.push(fn));
+
+    listen<string>("step-deleted", (event) => {
+      setSteps((prev) => prev.filter((s) => s.id !== event.payload));
+    }).then((fn) => unlisteners.push(fn));
+
+    listen<Step[]>("steps-reordered", (event) => {
+      setSteps(event.payload);
+    }).then((fn) => unlisteners.push(fn));
+
+    return () => {
+      unlisteners.forEach((fn) => fn());
+    };
+  }, []);
+
   const missingPermissions = useMemo(() => {
     if (!permissions) {
       return [] as string[];
@@ -285,6 +325,7 @@ export default function RecorderPanel() {
       if (!path) return;
       await invoke("export_guide", { title, format, outputPath: path });
       setShowExportSheet(false);
+      getCurrentWindow().hide();
     } catch (err) {
       setError(String(err));
     } finally {
@@ -332,12 +373,26 @@ export default function RecorderPanel() {
   }, [steps.length, handleCommand]);
 
   const handleDeleteStep = useCallback((id: string) => {
+    invoke("delete_step", { stepId: id }).catch(() => {});
     setSteps((prev) => {
       const next = prev.filter((s) => s.id !== id);
       if (next.length === 0) {
         setStatus("idle");
       }
       return next;
+    });
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setSteps((prev) => {
+      const oldIndex = prev.findIndex((s) => s.id === active.id);
+      const newIndex = prev.findIndex((s) => s.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      invoke("reorder_steps", { stepIds: reordered.map((s) => s.id) }).catch(() => {});
+      return reordered;
     });
   }, []);
 
@@ -534,11 +589,15 @@ export default function RecorderPanel() {
                 Click anywhere to capture steps.
               </div>
             ) : (
-              <div className="steps-list">
-                {steps.map((step, index) => (
-                  <StepItem key={step.id} step={step} index={index} onDelete={handleDeleteStep} />
-                ))}
-              </div>
+              <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                  <div className="steps-list">
+                    {steps.map((step, index) => (
+                      <StepItem key={step.id} step={step} index={index} onDelete={handleDeleteStep} sortable />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </div>
         </section>
@@ -553,22 +612,55 @@ export default function RecorderPanel() {
                 <h2>Steps</h2>
                 <span className="muted">{steps.length} captured</span>
               </div>
-              <div className="steps-list">
-                {steps.map((step, index) => (
-                  <StepItem key={step.id} step={step} index={index} onDelete={handleDeleteStep} />
-                ))}
-              </div>
+              <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+                  <div className="steps-list">
+                    {steps.map((step, index) => (
+                      <StepItem key={step.id} step={step} index={index} onDelete={handleDeleteStep} sortable />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             </div>
           </section>
 
           <div className="action-bar">
+            <div className="action-dropdown">
+              <button
+                className="button"
+                onClick={() => setShowNewMenu((v) => !v)}
+              >
+                <RecordIcon />
+                New
+              </button>
+              {showNewMenu && (
+                <>
+                  <div className="action-dropdown-backdrop" onClick={() => setShowNewMenu(false)} />
+                  <div className="action-dropdown-menu">
+                    <button
+                      onClick={() => { setShowNewMenu(false); handleNewRecording(); }}
+                      disabled={!permissionsReady}
+                    >
+                      <RecordIcon />
+                      New Recording
+                    </button>
+                    <button
+                      className="danger"
+                      onClick={() => { setShowNewMenu(false); handleDiscard(); }}
+                    >
+                      <TrashIcon />
+                      Discard All
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               className="button"
-              onClick={handleNewRecording}
-              disabled={!permissionsReady}
+              onClick={() => invoke("open_editor_window")}
             >
-              <RecordIcon />
-              New Recording
+              <EditIcon />
+              Edit
             </button>
             <button
               className="button primary"

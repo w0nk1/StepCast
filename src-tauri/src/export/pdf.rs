@@ -131,7 +131,7 @@ fn render_pdf_on_main_thread(html: &str, output_path: &str, tx: mpsc::Sender<Res
                         let raw_bytes = (*data).to_vec();
                         let bytes = optimize_pdf_bytes(&raw_bytes);
                         std::fs::write(&path, bytes)
-                            .map_err(|e| format!("Failed to write PDF file: {e}"))
+                            .map_err(|e| super::friendly_write_error(&e, &path))
                     } else if !error.is_null() {
                         Err(format!("PDF generation failed: {}", *error))
                     } else {

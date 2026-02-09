@@ -26,8 +26,13 @@ pub fn generate_for(title: &str, steps: &[Step], target: ImageTarget) -> String 
 </style>
 </head>
 <body>
-<h1>{title_esc} — {count} step{plural}</h1>
+<div class="container">
+<h1>{title_esc}</h1>
+<p class="subtitle">{count} step{plural}</p>
+<div class="timeline">
 {steps_html}
+</div>
+</div>
 </body>
 </html>"#,
         title_esc = html_escape(title),
@@ -67,19 +72,21 @@ fn render_step(num: usize, step: &Step, target: ImageTarget) -> String {
 
     format!(
         r#"
-    <article class="step">
-      <div class="step-header">
-        <span class="step-number">Step {num}</span>
-        <span class="step-app">{desc}</span>
-      </div>
-      <div class="step-image">
-        <div class="image-wrapper">
-          {image_html}
-          {click_marker}
+    <div class="timeline-item">
+      <div class="timeline-badge">{num}</div>
+      <article class="step">
+        <div class="step-header">
+          <span class="step-desc">{desc}</span>
         </div>
-      </div>
-      {note_html}
-    </article>"#
+        <div class="step-image">
+          <div class="image-wrapper">
+            {image_html}
+            {click_marker}
+          </div>
+        </div>
+        {note_html}
+      </article>
+    </div>"#
     )
 }
 
@@ -88,38 +95,44 @@ fn escape_text(s: &str) -> String {
     html_escape(s).replace('\'', "&#x27;")
 }
 
-const CSS: &str = r#"* { box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #1d1d1f; background: #fff; line-height: 1.5; }
-h1 { margin-bottom: 8px; }
-.meta { color: #86868b; font-size: 14px; margin-bottom: 32px; }
-.step { margin-bottom: 32px; border: 1px solid #e8e8ed; border-radius: 12px; overflow: hidden; }
-.step-header { padding: 12px 16px; background: #f5f5f7; border-bottom: 1px solid #e8e8ed; display: flex; gap: 12px; align-items: center; }
-.step-number { font-weight: 600; font-size: 12px; text-transform: uppercase; color: #86868b; white-space: nowrap; }
-.step-app { color: #1d1d1f; }
-.step-image { background: #f5f5f7; display: flex; align-items: center; justify-content: center; padding: 16px; }
-.step-image img { display: block; max-width: 100%; height: auto; }
-.image-wrapper { position: relative; display: inline-block; max-width: 100%; }
-.step-note { margin: 0; padding: 10px 16px; font-size: 14px; color: #1d1d1f; background: #fef9e7; border-top: 1px solid #e8e8ed; }
+const CSS: &str = r#"* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; line-height: 1.5; -webkit-font-smoothing: antialiased; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.container { max-width: 860px; margin: 0 auto; padding: 40px 32px 64px; }
+h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+.subtitle { font-size: 14px; color: #86868b; margin-bottom: 32px; }
+.timeline { display: flex; flex-direction: column; position: relative; }
+.timeline::before { content: ''; position: absolute; left: 15px; top: 16px; bottom: 16px; width: 2px; background: #d1d1d6; border-radius: 1px; }
+.timeline-item { display: grid; grid-template-columns: 32px 1fr; gap: 16px; padding-bottom: 24px; position: relative; }
+.timeline-item:last-child { padding-bottom: 0; }
+.timeline-badge { width: 32px; height: 32px; border-radius: 50%; background: #7c5cfc; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; box-shadow: 0 0 0 4px #f5f5f7; flex-shrink: 0; }
+.step { border: 1px solid #d1d1d6; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03); }
+.step-header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; }
+.step-desc { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+.step-image { padding: 0 20px 16px; display: flex; align-items: center; justify-content: center; }
+.image-wrapper { position: relative; display: inline-block; max-width: 100%; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.08); border: 1px solid #d1d1d6; }
+.image-wrapper img { display: block; max-width: 100%; height: auto; }
+.step-note { margin: 0; padding: 12px 20px 16px; font-size: 13px; color: #1d1d1f; background: rgba(124,92,252,0.05); border-top: none; }
 .click-marker { position: absolute; width: 24px; height: 24px; border-radius: 50%; background: transparent; border: 2.5px solid #ff3b30; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9), 0 2px 6px rgba(0,0,0,0.25); transform: translate(-50%, -50%); pointer-events: none; }
 .click-marker.double-click { width: 18px; height: 18px; border-width: 2px; }
 .click-marker.double-click::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%; border: 2px solid #ff3b30; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.9); pointer-events: none; }
 .click-marker.right-click { border-style: dashed; }
 @media print {
-  .step { break-inside: avoid; }
-  body { background: #fff !important; color: #1d1d1f !important; }
-  .step { border-color: #e8e8ed !important; }
-  .step-header { background: #f5f5f7 !important; border-color: #e8e8ed !important; }
-  .step-app { color: #1d1d1f !important; }
-  .step-image { background: #f5f5f7 !important; }
-  .step-note { background: #fef9e7 !important; color: #1d1d1f !important; border-color: #e8e8ed !important; }
+  body { background: #fff !important; }
+  .container { padding: 20px !important; }
+  .timeline::before { background: #d1d1d6 !important; }
+  .timeline-badge { box-shadow: 0 0 0 4px #fff !important; }
+  .timeline-item { break-inside: avoid; }
+  .step { box-shadow: none !important; border-color: #d1d1d6 !important; }
 }
 @media (prefers-color-scheme: dark) {
-  body { background: #1d1d1f; color: #f5f5f7; }
-  .step { border-color: #38383d; }
-  .step-header { background: #2c2c2e; border-color: #38383d; }
-  .step-app { color: #f5f5f7; }
-  .step-image { background: #2c2c2e; }
-  .step-note { background: #3a3520; color: #f5f5f7; border-color: #38383d; }
+  body { background: #1c1c1e; color: #f5f5f7; }
+  .subtitle { color: #98989d; }
+  .timeline::before { background: #38383a; }
+  .timeline-badge { box-shadow: 0 0 0 4px #1c1c1e; }
+  .step { background: #2c2c2e; border-color: #38383a; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15); }
+  .step-desc { color: #f5f5f7; }
+  .image-wrapper { border-color: #38383a; }
+  .step-note { color: #f5f5f7; background: rgba(167,139,250,0.08); }
 }"#;
 
 #[cfg(test)]
@@ -148,7 +161,8 @@ mod tests {
     fn generate_contains_title() {
         let html = generate("Test Guide", &[sample_step()]);
         assert!(html.contains("<title>Test Guide</title>"));
-        assert!(html.contains("<h1>Test Guide — 1 step</h1>"));
+        assert!(html.contains("<h1>Test Guide</h1>"));
+        assert!(html.contains("1 step"));
     }
 
     #[test]
@@ -164,9 +178,10 @@ mod tests {
     }
 
     #[test]
-    fn generate_contains_step_article() {
+    fn generate_contains_timeline_structure() {
         let html = generate("G", &[sample_step()]);
-        assert!(html.contains("Step 1"));
+        assert!(html.contains("timeline-badge"));
+        assert!(html.contains("timeline-item"));
         assert!(html.contains("Clicked in Finder"));
     }
 

@@ -12,7 +12,7 @@ use recorder::types::Step;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 #[cfg(not(debug_assertions))]
 use tauri_plugin_aptabase::EventTracker;
 
@@ -647,10 +647,11 @@ fn get_steps(state: tauri::State<'_, RecorderAppState>) -> Result<Vec<Step>, Str
         .session
         .lock()
         .map_err(|_| "session lock poisoned")?;
-    Ok(session_lock
+    let steps = session_lock
         .as_ref()
         .map(|s| s.get_steps().to_vec())
-        .unwrap_or_default())
+        .unwrap_or_default();
+    Ok(steps)
 }
 
 #[tauri::command]
@@ -704,6 +705,9 @@ fn discard_recording(
         ps.reset();
     }
 
+    // Notify editor window (if open) that steps were discarded
+    let _ = app.emit("steps-discarded", ());
+
     // Show panel and reset icon on main thread after discard
     let app_clone = app.clone();
     let _ = app.run_on_main_thread(move || {
@@ -729,6 +733,91 @@ fn discard_recording(
             eprintln!("Failed to reset tray icon: {e}");
         }
     });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn update_step_note(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RecorderAppState>,
+    step_id: String,
+    note: Option<String>,
+) -> Result<(), String> {
+    let mut session_lock = state
+        .session
+        .lock()
+        .map_err(|_| "session lock poisoned")?;
+    let session = session_lock
+        .as_mut()
+        .ok_or("no active session")?;
+    let updated = session
+        .update_step_note(&step_id, note)
+        .ok_or("step not found")?
+        .clone();
+    let _ = app.emit("step-updated", &updated);
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_step(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RecorderAppState>,
+    step_id: String,
+) -> Result<(), String> {
+    let mut session_lock = state
+        .session
+        .lock()
+        .map_err(|_| "session lock poisoned")?;
+    let session = session_lock
+        .as_mut()
+        .ok_or("no active session")?;
+    if !session.delete_step(&step_id) {
+        return Err("step not found".into());
+    }
+    let _ = app.emit("step-deleted", &step_id);
+    Ok(())
+}
+
+#[tauri::command]
+fn reorder_steps(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, RecorderAppState>,
+    step_ids: Vec<String>,
+) -> Result<Vec<Step>, String> {
+    let mut session_lock = state
+        .session
+        .lock()
+        .map_err(|_| "session lock poisoned")?;
+    let session = session_lock
+        .as_mut()
+        .ok_or("no active session")?;
+    session.reorder_steps(&step_ids);
+    let steps = session.get_steps().to_vec();
+    let _ = app.emit("steps-reordered", &steps);
+    Ok(steps)
+}
+
+#[tauri::command]
+fn open_editor_window(app: tauri::AppHandle) -> Result<(), String> {
+    // Hide the tray panel so it doesn't overlap the editor
+    if let Some(panel_window) = app.get_webview_window(panel::panel_label()) {
+        let _ = panel_window.hide();
+    }
+
+    // If editor already exists, focus it
+    if let Some(window) = app.get_webview_window("step-editor") {
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "step-editor", WebviewUrl::App("/editor.html".into()))
+        .title("Step Editor")
+        .inner_size(900.0, 700.0)
+        .resizable(true)
+        .decorations(true)
+        .build()
+        .map_err(|e| format!("Failed to create editor window: {e}"))?;
 
     Ok(())
 }
@@ -845,6 +934,10 @@ pub fn run() {
             resume_recording,
             stop_recording,
             get_steps,
+            update_step_note,
+            delete_step,
+            reorder_steps,
+            open_editor_window,
             export_guide,
             discard_recording,
             get_startup_state,

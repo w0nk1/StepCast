@@ -1,14 +1,17 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Step } from "../types/step";
 
 type StepItemProps = {
   step: Step;
   index: number;
   onDelete?: (id: string) => void;
+  sortable?: boolean;
 };
 
-export default memo(function StepItem({ step, index, onDelete }: StepItemProps) {
+export default memo(function StepItem({ step, index, onDelete, sortable }: StepItemProps) {
   const [confirming, setConfirming] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -53,8 +56,35 @@ export default memo(function StepItem({ step, index, onDelete }: StepItemProps) 
     ? "Authentication required (secure dialog)"
     : `${actionDesc} ${step.app}`;
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: step.id, disabled: !sortable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  };
+
   return (
-    <div className="step-item">
+    <div className="step-item" ref={setNodeRef} style={style} {...attributes}>
+      {sortable && (
+        <button className="drag-handle" {...listeners} title="Drag to reorder">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+            <circle cx="3" cy="2" r="1.5"/>
+            <circle cx="7" cy="2" r="1.5"/>
+            <circle cx="3" cy="7" r="1.5"/>
+            <circle cx="7" cy="7" r="1.5"/>
+            <circle cx="3" cy="12" r="1.5"/>
+            <circle cx="7" cy="12" r="1.5"/>
+          </svg>
+        </button>
+      )}
       <div className="step-thumb">
         {thumbnailSrc && (
           <img src={thumbnailSrc} alt={`Step ${index + 1}`} />

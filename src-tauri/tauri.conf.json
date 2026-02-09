@@ -38,7 +38,7 @@
         "style-src": "'self' 'unsafe-inline' http://localhost:1420",
         "script-src": "'self' 'unsafe-eval' http://localhost:1420"
       },
-      "capabilities": ["default"],
+      "capabilities": ["default", "editor"],
       "assetProtocol": {
         "enable": true,
         "scope": ["$HOME/Library/Caches/**", "$TEMP/**"]

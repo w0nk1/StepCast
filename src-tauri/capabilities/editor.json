@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "editor",
+  "description": "Capability for the step editor window",
+  "windows": ["step-editor"],
+  "permissions": [
+    "core:default",
+    "allow-get-steps",
+    "allow-update-step-note",
+    "allow-delete-step",
+    "allow-open-editor-window"
+  ]
+}

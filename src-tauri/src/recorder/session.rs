@@ -85,6 +85,32 @@ impl Session {
         self.steps.last_mut()
     }
 
+    /// Update a step's note by ID. Returns the updated step or None if not found.
+    pub fn update_step_note(&mut self, step_id: &str, note: Option<String>) -> Option<&Step> {
+        let step = self.steps.iter_mut().find(|s| s.id == step_id)?;
+        step.note = note;
+        Some(step)
+    }
+
+    /// Remove a step by ID. Returns true if found and removed.
+    pub fn delete_step(&mut self, step_id: &str) -> bool {
+        let before = self.steps.len();
+        self.steps.retain(|s| s.id != step_id);
+        self.steps.len() < before
+    }
+
+    /// Reorder steps to match the given ID sequence.
+    /// IDs not in the list are dropped; unknown IDs are ignored.
+    pub fn reorder_steps(&mut self, step_ids: &[String]) {
+        let mut reordered = Vec::with_capacity(step_ids.len());
+        for id in step_ids {
+            if let Some(pos) = self.steps.iter().position(|s| s.id == *id) {
+                reordered.push(self.steps.swap_remove(pos));
+            }
+        }
+        self.steps = reordered;
+    }
+
     pub fn next_step_id(&self) -> String {
         format!("step-{:03}", self.steps.len() + 1)
     }
@@ -130,6 +156,26 @@ mod tests {
         assert_eq!(session.next_step_id(), "step-002");
 
         // Cleanup
+        std::fs::remove_dir_all(&session.temp_dir).ok();
+    }
+
+    #[test]
+    fn update_step_note_sets_note() {
+        let mut session = Session::new().expect("create session");
+        session.add_step(Step::sample());
+
+        let updated = session.update_step_note("step-1", Some("Hello".into()));
+        assert!(updated.is_some());
+        assert_eq!(updated.unwrap().note, Some("Hello".into()));
+
+        // Clear note
+        let updated = session.update_step_note("step-1", None);
+        assert!(updated.is_some());
+        assert_eq!(updated.unwrap().note, None);
+
+        // Nonexistent step
+        assert!(session.update_step_note("nonexistent", Some("x".into())).is_none());
+
         std::fs::remove_dir_all(&session.temp_dir).ok();
     }
 

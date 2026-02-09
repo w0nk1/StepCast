@@ -50,10 +50,16 @@ function makeStep(overrides: Partial<Step> = {}): Step {
 
 // Capture listen callbacks so we can simulate events
 let stepCapturedCallback: ((event: { payload: Step }) => void) | null = null;
+let stepUpdatedCallback: ((event: { payload: Step }) => void) | null = null;
+let stepDeletedCallback: ((event: { payload: string }) => void) | null = null;
+let stepsReorderedCallback: ((event: { payload: Step[] }) => void) | null = null;
 let panelPositionedCallback: ((event: { payload: boolean }) => void) | null = null;
 
 beforeEach(() => {
   stepCapturedCallback = null;
+  stepUpdatedCallback = null;
+  stepDeletedCallback = null;
+  stepsReorderedCallback = null;
   panelPositionedCallback = null;
   mockInvoke.mockReset();
   mockListen.mockReset();
@@ -76,6 +82,12 @@ beforeEach(() => {
   mockListen.mockImplementation(async (event, handler) => {
     if (event === "step-captured") {
       stepCapturedCallback = handler as (event: { payload: Step }) => void;
+    } else if (event === "step-updated") {
+      stepUpdatedCallback = handler as (event: { payload: Step }) => void;
+    } else if (event === "step-deleted") {
+      stepDeletedCallback = handler as (event: { payload: string }) => void;
+    } else if (event === "steps-reordered") {
+      stepsReorderedCallback = handler as (event: { payload: Step[] }) => void;
     } else if (event === "panel-positioned") {
       panelPositionedCallback = handler as (event: { payload: boolean }) => void;
     }
@@ -427,6 +439,37 @@ describe("RecorderPanel", () => {
     });
   });
 
+  describe("edit steps", () => {
+    it("opens editor window when Edit clicked", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Stop"));
+
+      await user.click(screen.getByText("Edit"));
+      expect(mockInvoke).toHaveBeenCalledWith("open_editor_window");
+    });
+
+    it("syncs step updates from editor window", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      const step = makeStep({ id: "s1", app: "Finder" });
+      emitStep(step);
+
+      // Simulate step-updated event from editor
+      act(() => {
+        stepUpdatedCallback?.({ payload: { ...step, note: "From editor" } });
+      });
+
+      // Step should still be in list (the note update doesn't visually change the panel list item)
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+  });
+
   describe("new recording", () => {
     it("confirms before starting new recording with existing steps", async () => {
       const user = userEvent.setup();
@@ -437,6 +480,7 @@ describe("RecorderPanel", () => {
       emitStep(makeStep({ id: "s1" }));
       await user.click(screen.getByText("Stop"));
 
+      await user.click(screen.getByText("New"));
       await user.click(screen.getByText("New Recording"));
       expect(mockAsk).toHaveBeenCalled();
       expect(mockInvoke).toHaveBeenCalledWith("start_recording");
@@ -451,6 +495,7 @@ describe("RecorderPanel", () => {
       emitStep(makeStep({ id: "s1" }));
       await user.click(screen.getByText("Stop"));
 
+      await user.click(screen.getByText("New"));
       await user.click(screen.getByText("New Recording"));
       expect(screen.getByText("Stopped")).toBeInTheDocument();
     });
@@ -478,6 +523,27 @@ describe("RecorderPanel", () => {
 
       expect(mockDownloadAndInstall).toHaveBeenCalled();
       expect(mockRelaunch).toHaveBeenCalled();
+    });
+
+    it("shows release notes when update has body", async () => {
+      mockCheck.mockResolvedValue(fakeUpdate({ body: "## Changes\n- New feature" }));
+      render(<RecorderPanel />);
+      expect(await screen.findByText("v2.0.0 available")).toBeInTheDocument();
+    });
+
+    it("recovers from update install failure", async () => {
+      const user = userEvent.setup();
+      const mockDownloadAndInstall = vi.fn().mockRejectedValue(new Error("network"));
+      mockCheck.mockResolvedValue(
+        fakeUpdate({ downloadAndInstall: mockDownloadAndInstall }),
+      );
+
+      render(<RecorderPanel />);
+      const installBtn = await screen.findByText("Install");
+      await user.click(installBtn);
+
+      // Should recover - Install button should be back (not stuck on "Updating...")
+      expect(await screen.findByText("Install")).toBeInTheDocument();
     });
 
     it("does not show update banner when no update", async () => {
@@ -548,6 +614,225 @@ describe("RecorderPanel", () => {
       // Go back
       await user.click(screen.getByTitle("Back"));
       expect(await screen.findByText("StepCast")).toBeInTheDocument();
+    });
+  });
+
+  describe("what's new banner", () => {
+    it("shows what's new banner after update", async () => {
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === "check_permissions") {
+          return { screen_recording: true, accessibility: true };
+        }
+        if (cmd === "get_startup_state") {
+          return { has_launched_before: true, last_seen_version: "0.1.0" };
+        }
+        return undefined;
+      });
+
+      render(<RecorderPanel />);
+      expect(await screen.findByText("Updated to v0.2.0")).toBeInTheDocument();
+      expect(screen.getByText("Dismiss")).toBeInTheDocument();
+    });
+
+    it("dismisses what's new banner", async () => {
+      const user = userEvent.setup();
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === "check_permissions") {
+          return { screen_recording: true, accessibility: true };
+        }
+        if (cmd === "get_startup_state") {
+          return { has_launched_before: true, last_seen_version: "0.1.0" };
+        }
+        return undefined;
+      });
+
+      render(<RecorderPanel />);
+      await user.click(await screen.findByText("Dismiss"));
+      expect(screen.queryByText("Updated to v0.2.0")).not.toBeInTheDocument();
+      expect(mockInvoke).toHaveBeenCalledWith("dismiss_whats_new");
+    });
+  });
+
+  describe("welcome banner", () => {
+    it("shows welcome banner on first run", async () => {
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === "check_permissions") {
+          return { screen_recording: true, accessibility: true };
+        }
+        if (cmd === "get_startup_state") {
+          return { has_launched_before: false, last_seen_version: null };
+        }
+        return undefined;
+      });
+
+      render(<RecorderPanel />);
+      expect(await screen.findByText("Welcome to StepCast")).toBeInTheDocument();
+    });
+
+    it("shows welcome banner on show-quick-start event", async () => {
+      let quickStartCallback: (() => void) | null = null;
+      mockListen.mockImplementation(async (event, handler) => {
+        if (event === "step-captured") {
+          stepCapturedCallback = handler as (event: { payload: Step }) => void;
+        } else if (event === "step-updated") {
+          stepUpdatedCallback = handler as (event: { payload: Step }) => void;
+        } else if (event === "step-deleted") {
+          stepDeletedCallback = handler as (event: { payload: string }) => void;
+        } else if (event === "steps-reordered") {
+          stepsReorderedCallback = handler as (event: { payload: Step[] }) => void;
+        } else if (event === "panel-positioned") {
+          panelPositionedCallback = handler as (event: { payload: boolean }) => void;
+        } else if (event === "show-quick-start") {
+          quickStartCallback = handler as () => void;
+        }
+        return vi.fn() as unknown as () => void;
+      });
+
+      render(<RecorderPanel />);
+      await screen.findByText("Start Recording");
+
+      act(() => {
+        quickStartCallback?.();
+      });
+
+      expect(screen.getByText("Welcome to StepCast")).toBeInTheDocument();
+    });
+  });
+
+  describe("export error handling", () => {
+    it("shows error when export fails", async () => {
+      const user = userEvent.setup();
+      mockSave.mockResolvedValue("/tmp/guide.pdf");
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === "check_permissions") {
+          return { screen_recording: true, accessibility: true };
+        }
+        if (cmd === "export_guide") {
+          throw new Error("Export failed");
+        }
+        return undefined;
+      });
+
+      render(<RecorderPanel />);
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Stop"));
+      await user.click(screen.getByText("Export"));
+      const sheet = document.querySelector(".export-sheet")!;
+      const sheetExportBtn = sheet.querySelector(".button.primary") as HTMLElement;
+      await user.click(sheetExportBtn);
+
+      expect(screen.getByText("Error: Export failed")).toBeInTheDocument();
+    });
+  });
+
+  describe("new button dropdown in stopped state", () => {
+    it("shows dropdown menu when New clicked", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Stop"));
+      await user.click(screen.getByText("New"));
+
+      expect(screen.getByText("New Recording")).toBeInTheDocument();
+      expect(screen.getByText("Discard All")).toBeInTheDocument();
+    });
+
+    it("starts new recording from dropdown", async () => {
+      const user = userEvent.setup();
+      mockAsk.mockResolvedValue(true);
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Stop"));
+      await user.click(screen.getByText("New"));
+      await user.click(screen.getByText("New Recording"));
+
+      expect(mockInvoke).toHaveBeenCalledWith("start_recording");
+    });
+
+    it("discards all from dropdown", async () => {
+      const user = userEvent.setup();
+      mockAsk.mockResolvedValue(true);
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Stop"));
+      await user.click(screen.getByText("New"));
+      await user.click(screen.getByText("Discard All"));
+
+      expect(mockAsk).toHaveBeenCalled();
+      expect(mockInvoke).toHaveBeenCalledWith("discard_recording");
+    });
+
+    it("closes dropdown on backdrop click", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Stop"));
+      await user.click(screen.getByText("New"));
+      expect(screen.getByText("Discard All")).toBeInTheDocument();
+
+      await user.click(document.querySelector(".action-dropdown-backdrop")!);
+      expect(screen.queryByText("Discard All")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("cross-window sync events", () => {
+    it("removes step on step-deleted event", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+
+      act(() => {
+        stepDeletedCallback?.({ payload: "s1" });
+      });
+
+      expect(screen.queryByText("Clicked in Finder")).not.toBeInTheDocument();
+    });
+
+    it("reorders steps on steps-reordered event", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1", app: "Finder" }));
+      emitStep(makeStep({ id: "s2", app: "Safari" }));
+
+      act(() => {
+        stepsReorderedCallback?.({
+          payload: [
+            makeStep({ id: "s2", app: "Safari" }),
+            makeStep({ id: "s1", app: "Finder" }),
+          ],
+        });
+      });
+
+      const descs = document.querySelectorAll(".step-desc");
+      expect(descs[0].textContent).toBe("Clicked in Safari");
+      expect(descs[1].textContent).toBe("Clicked in Finder");
+    });
+
+    it("calls delete_step backend on step delete", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+
+      // Click delete button then confirm
+      const deleteBtn = screen.getByTitle("Remove step");
+      await user.click(deleteBtn);
+      await user.click(deleteBtn); // confirm
+      expect(mockInvoke).toHaveBeenCalledWith("delete_step", { stepId: "s1" });
     });
   });
 });

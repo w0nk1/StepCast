@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-delete-step"
+description = "Enables the delete_step command without any pre-configured scope."
+commands.allow = ["delete_step"]
+
+[[permission]]
+identifier = "deny-delete-step"
+description = "Denies the delete_step command without any pre-configured scope."
+commands.deny = ["delete_step"]

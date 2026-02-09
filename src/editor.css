@@ -1,0 +1,263 @@
+/* Editor window — overrides panel-specific layout from App.css */
+
+html, body {
+  background: var(--bg-secondary) !important;
+  overflow: hidden;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+/* Editor body — scroll container (prevents content bleeding behind title bar) */
+.editor-body {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.editor-empty {
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--bg-primary);
+}
+
+/* Timeline container */
+.editor-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+/* Vertical connector line */
+.editor-steps::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  background: var(--border);
+  border-radius: 1px;
+}
+
+/* Timeline item: badge + card row */
+.editor-timeline-item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 16px;
+  padding-bottom: 24px;
+  position: relative;
+}
+
+.editor-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+/* Numbered badge on the timeline */
+.editor-timeline-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 4px var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+/* Step card */
+.editor-step {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.editor-step:hover {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Dark mode: stronger shadows + inset highlight */
+@media (prefers-color-scheme: dark) {
+  .editor-step {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .editor-step:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+}
+
+[data-theme="dark"] .editor-step {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .editor-step:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Header */
+.editor-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+}
+
+.editor-step-delete {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step:hover .editor-step-delete {
+  opacity: 1;
+}
+
+.editor-step-delete:hover {
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--danger, #ff3b30);
+}
+
+.editor-step-desc {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Screenshot area */
+.editor-step-image {
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-image-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border);
+}
+
+.editor-image-wrapper img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Note row — below screenshot */
+.editor-step-note-row {
+  padding: 12px 20px 16px;
+}
+
+.editor-step-note-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-style: italic;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step-note-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+  font-style: normal;
+}
+
+.editor-step-note-btn.has-note {
+  color: var(--text-primary);
+  font-style: normal;
+  background: rgba(124, 92, 252, 0.05);
+  border-color: rgba(124, 92, 252, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  .editor-step-note-btn.has-note {
+    background: rgba(167, 139, 250, 0.08);
+    border-color: rgba(167, 139, 250, 0.15);
+  }
+}
+
+[data-theme="dark"] .editor-step-note-btn.has-note {
+  background: rgba(167, 139, 250, 0.08);
+  border-color: rgba(167, 139, 250, 0.15);
+}
+
+.editor-step-note-input {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent);
+}

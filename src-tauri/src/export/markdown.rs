@@ -109,7 +109,7 @@ pub fn write(title: &str, steps: &[Step], output_path: &str) -> Result<(), Strin
     };
 
     fs::write(output_path, buf)
-        .map_err(|e| format!("Failed to write zip file: {e}"))?;
+        .map_err(|e| super::friendly_write_error(&e, output_path))?;
 
     Ok(())
 }
