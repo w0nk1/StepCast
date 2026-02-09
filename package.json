@@ -15,7 +15,8 @@
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "sh .githooks/pre-commit.sh"
+    "pre-commit": "sh .githooks/pre-commit.sh",
+    "pre-push": "sh .githooks/pre-push.sh"
   },
   "dependencies": {
     "@aptabase/tauri": "^0.4.1",
