@@ -69,16 +69,24 @@ jobs:
 
       - name: Check version consistency
         run: |
-          TAURI_VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          TAURI_VERSION_RAW=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
           CARGO_VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           PKG_VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
 
-          echo "tauri.conf.json: $TAURI_VERSION"
+          echo "tauri.conf.json: $TAURI_VERSION_RAW"
           echo "Cargo.toml:      $CARGO_VERSION"
           echo "package.json:    $PKG_VERSION"
 
-          if [ "$TAURI_VERSION" != "$CARGO_VERSION" ] || [ "$TAURI_VERSION" != "$PKG_VERSION" ]; then
-            echo "ERROR: Version mismatch across config files!"
+          # tauri.conf.json may reference package.json directly (e.g. "../package.json")
+          if [ "$TAURI_VERSION_RAW" = "../package.json" ]; then
+            echo "tauri.conf.json reads version from package.json (OK)"
+          elif [ "$TAURI_VERSION_RAW" != "$PKG_VERSION" ]; then
+            echo "ERROR: tauri.conf.json version doesn't match package.json!"
             exit 1
           fi
-          echo "All versions in sync: $TAURI_VERSION"
+
+          if [ "$CARGO_VERSION" != "$PKG_VERSION" ]; then
+            echo "ERROR: Cargo.toml version doesn't match package.json!"
+            exit 1
+          fi
+          echo "All versions in sync: $PKG_VERSION"

@@ -53,17 +53,23 @@ jobs:
         run: |
           TAG="${{ steps.tag.outputs.version }}"
           VERSION="${TAG#v}"
-          TAURI_VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          TAURI_VERSION_RAW=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
           CARGO_VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           PKG_VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
 
           echo "Tag version:       $VERSION"
-          echo "tauri.conf.json:   $TAURI_VERSION"
+          echo "tauri.conf.json:   $TAURI_VERSION_RAW"
           echo "Cargo.toml:        $CARGO_VERSION"
           echo "package.json:      $PKG_VERSION"
 
-          if [ "$VERSION" != "$TAURI_VERSION" ] || [ "$VERSION" != "$CARGO_VERSION" ] || [ "$VERSION" != "$PKG_VERSION" ]; then
-            echo "ERROR: Version mismatch! All three config files must match the tag."
+          # tauri.conf.json may reference package.json directly
+          if [ "$TAURI_VERSION_RAW" != "../package.json" ] && [ "$TAURI_VERSION_RAW" != "$VERSION" ]; then
+            echo "ERROR: tauri.conf.json version doesn't match tag!"
+            exit 1
+          fi
+
+          if [ "$VERSION" != "$CARGO_VERSION" ] || [ "$VERSION" != "$PKG_VERSION" ]; then
+            echo "ERROR: Version mismatch! Cargo.toml and package.json must match the tag."
             exit 1
           fi
           echo "All versions match: $VERSION"

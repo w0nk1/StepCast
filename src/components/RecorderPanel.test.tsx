@@ -48,11 +48,13 @@ function makeStep(overrides: Partial<Step> = {}): Step {
   };
 }
 
-// Capture the listen callback so we can simulate events
+// Capture listen callbacks so we can simulate events
 let stepCapturedCallback: ((event: { payload: Step }) => void) | null = null;
+let panelPositionedCallback: ((event: { payload: boolean }) => void) | null = null;
 
 beforeEach(() => {
   stepCapturedCallback = null;
+  panelPositionedCallback = null;
   mockInvoke.mockReset();
   mockListen.mockReset();
   mockSave.mockReset();
@@ -70,10 +72,12 @@ beforeEach(() => {
 
   mockCheck.mockResolvedValue(null);
 
-  // Capture the listen callback
+  // Capture listen callbacks
   mockListen.mockImplementation(async (event, handler) => {
     if (event === "step-captured") {
       stepCapturedCallback = handler as (event: { payload: Step }) => void;
+    } else if (event === "panel-positioned") {
+      panelPositionedCallback = handler as (event: { payload: boolean }) => void;
     }
     return vi.fn() as unknown as () => void; // unlisten
   });
@@ -482,6 +486,53 @@ describe("RecorderPanel", () => {
       // Wait for permissions to resolve
       await screen.findByText("Start Recording");
       expect(screen.queryByText(/available/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("fallback positioning", () => {
+    it("hides notch and shows hint when panel-positioned is false", async () => {
+      render(<RecorderPanel />);
+      await screen.findByText("Start Recording");
+
+      act(() => {
+        panelPositionedCallback?.({ payload: false });
+      });
+
+      const panel = document.querySelector(".panel")!;
+      expect(panel.classList.contains("no-notch")).toBe(true);
+      expect(screen.getByText(/Tray icon hidden/)).toBeInTheDocument();
+    });
+
+    it("dismisses fallback hint when close button clicked", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+      await screen.findByText("Start Recording");
+
+      act(() => {
+        panelPositionedCallback?.({ payload: false });
+      });
+
+      await user.click(screen.getByTitle("Dismiss"));
+      expect(screen.queryByText(/Tray icon hidden/)).not.toBeInTheDocument();
+
+      const panel = document.querySelector(".panel")!;
+      expect(panel.classList.contains("no-notch")).toBe(false);
+    });
+
+    it("restores notch when panel-positioned is true", async () => {
+      render(<RecorderPanel />);
+      await screen.findByText("Start Recording");
+
+      act(() => {
+        panelPositionedCallback?.({ payload: false });
+      });
+      expect(document.querySelector(".panel.no-notch")).toBeTruthy();
+
+      act(() => {
+        panelPositionedCallback?.({ payload: true });
+      });
+      expect(document.querySelector(".panel.no-notch")).toBeNull();
+      expect(screen.queryByText(/Tray icon hidden/)).not.toBeInTheDocument();
     });
   });
 

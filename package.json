@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "version": "node scripts/sync-version.js && git add src-tauri/Cargo.toml src-tauri/Cargo.lock",
+    "postversion": "git push && git push --tags",
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
