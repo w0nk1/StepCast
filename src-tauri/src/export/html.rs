@@ -64,10 +64,7 @@ fn render_step(num: usize, step: &Step, target: ImageTarget) -> String {
 
     let click_marker = marker_position_percent(step)
         .map(|(x, y)| {
-            format!(
-                r#"<div class="{}" style="left: {}%; top: {}%;"></div>"#,
-                marker_class, x, y
-            )
+            format!(r#"<div class="{marker_class}" style="left: {x}%; top: {y}%;"></div>"#)
         })
         .unwrap_or_default();
 
