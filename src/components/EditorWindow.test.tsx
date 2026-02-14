@@ -224,4 +224,157 @@ describe("EditorWindow", () => {
     expect(descs[0].textContent).toBe("Clicked in Safari");
     expect(descs[1].textContent).toBe("Clicked in Finder");
   });
+
+  it("updates description through editor card callback path", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+    mockInvoke.mockResolvedValue(undefined);
+
+    render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByText("Clicked in Finder"));
+    const input = screen.getByPlaceholderText("Step description...");
+    await user.clear(input);
+    await user.type(input, "Open Finder quickly{Enter}");
+
+    expect(mockInvoke).toHaveBeenCalledWith("update_step_description", {
+      stepId: "step-1",
+      description: "Open Finder quickly",
+    });
+  });
+
+  it("updates crop through editor card callback path", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+    mockInvoke.mockResolvedValue(undefined);
+
+    render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTitle("Adjust visible screenshot area"));
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(mockInvoke).toHaveBeenCalledWith("update_step_crop", {
+      stepId: "step-1",
+      cropRegion: null,
+    });
+  });
+
+  it("generates single-step descriptions only when AI is enabled", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("appleIntelligenceDescriptions", "false");
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+    mockInvoke.mockResolvedValue(undefined);
+
+    render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getAllByTitle("Enable Apple Intelligence descriptions in StepCast Settings")[1]);
+    expect(mockInvoke).not.toHaveBeenCalledWith("generate_step_descriptions", {
+      stepIds: ["step-1"],
+    });
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "appleIntelligenceDescriptions",
+          newValue: "true",
+        }),
+      );
+    });
+    await user.click(screen.getByTitle("Generate with Apple Intelligence"));
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", { stepIds: ["step-1"] });
+  });
+
+  it("enhances missing descriptions first, then all when none are missing", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("appleIntelligenceDescriptions", "true");
+    mockInvoke.mockResolvedValueOnce([
+      makeStep({ id: "step-1", description: "" }),
+      makeStep({ id: "step-2", description: "already there", app: "Safari" }),
+    ]);
+    mockInvoke.mockResolvedValue(undefined);
+
+    const listeners = captureListeners();
+    render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("2 steps")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /Enhance Steps/i }));
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", { mode: "missing_only" });
+
+    act(() => {
+      listeners["steps-reordered"]({
+        payload: [
+          makeStep({ id: "step-1", description: "done" }),
+          makeStep({ id: "step-2", description: "done too", app: "Safari" }),
+        ],
+      });
+    });
+    await user.click(screen.getByRole("button", { name: /Enhance Steps/i }));
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", { mode: "all" });
+  });
+
+  it("syncs AI toggle from storage and tauri event listeners", async () => {
+    localStorage.setItem("appleIntelligenceDescriptions", "false");
+    const listeners = captureListeners();
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+
+    render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: /Enhance Steps/i })).toBeDisabled();
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "some-other-key",
+          newValue: "true",
+        }),
+      );
+    });
+    expect(screen.getByRole("button", { name: /Enhance Steps/i })).toBeDisabled();
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "appleIntelligenceDescriptions",
+          newValue: "true",
+        }),
+      );
+    });
+    expect(screen.getByRole("button", { name: /Enhance Steps/i })).toBeEnabled();
+
+    act(() => {
+      listeners["ai-toggle-changed"]({ payload: { enabled: false } });
+    });
+    expect(screen.getByRole("button", { name: /Enhance Steps/i })).toBeDisabled();
+  });
+
+  it("handles ai-toggle listener registration failure gracefully", async () => {
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+    mockListen.mockImplementation(async (event, handler) => {
+      if (event === "ai-toggle-changed") {
+        void handler;
+        return Promise.reject(new Error("listen failed"));
+      }
+      return () => {};
+    });
+
+    const { unmount } = render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+    expect(() => unmount()).not.toThrow();
+  });
 });

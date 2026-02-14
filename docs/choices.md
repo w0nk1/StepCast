@@ -223,3 +223,6 @@
 - Default: crop drag preview updates are batched via `requestAnimationFrame`; reason: smoother drag with lower React render pressure under frequent pointermove events.
 - Default: commit crop changes only when movement exceeds a minimal epsilon (`0.02` percent units); reason: ignore jitter/no-op clicks and reduce unnecessary state writes/events.
 - Default: editor and timeline images use `loading="lazy"` + `decoding="async"`; reason: lower initial decode cost for long recordings.
+2026-02-14 (pre-push-coverage-gate)
+- Default: keep strict per-file thresholds (`80/80/80/80`) and fix via targeted tests instead of lowering config; reason: preserves quality gate and prevents regressions on critical editor/crop flows.
+- Default: cover branch gaps through UI-level tests (RTL/Vitest) before considering instrumentation ignores; reason: executable behavior checks are more trustworthy than coverage-only annotations.

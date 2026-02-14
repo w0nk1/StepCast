@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Step } from "../types/step";
-import { markerPositionForStep, normalizeCropRegion } from "./stepCrop";
+import {
+  getCropAspectRatio,
+  getCroppedImageStyles,
+  isFullCrop,
+  markerPositionForStep,
+  normalizeCropRegion,
+} from "./stepCrop";
 
 function makeStep(overrides: Partial<Step> = {}): Step {
   return {
@@ -33,6 +39,29 @@ describe("stepCrop", () => {
       width_percent: 100,
       height_percent: 90,
     });
+  });
+
+  it("returns null for invalid/non-finite crop data", () => {
+    expect(normalizeCropRegion()).toBeNull();
+    expect(
+      normalizeCropRegion({
+        x_percent: Number.NaN,
+        y_percent: 0,
+        width_percent: 50,
+        height_percent: 50,
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null when crop is smaller than minimum size", () => {
+    expect(
+      normalizeCropRegion({
+        x_percent: 10,
+        y_percent: 10,
+        width_percent: 1,
+        height_percent: 50,
+      }),
+    ).toBeNull();
   });
 
   it("returns full marker position when no crop", () => {
@@ -72,5 +101,70 @@ describe("stepCrop", () => {
       }),
     );
     expect(marker.visible).toBe(false);
+  });
+
+  it("detects full crop correctly", () => {
+    expect(isFullCrop(null)).toBe(true);
+    expect(
+      isFullCrop({
+        x_percent: 0,
+        y_percent: 0,
+        width_percent: 100,
+        height_percent: 100,
+      }),
+    ).toBe(true);
+    expect(
+      isFullCrop({
+        x_percent: 1,
+        y_percent: 0,
+        width_percent: 99,
+        height_percent: 100,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns default styles for full crop and transformed styles for partial crop", () => {
+    const full = getCroppedImageStyles(null);
+    expect(full.frameClassName).toBe("step-image-frame");
+    expect(full.imageStyle).toEqual({});
+
+    const partial = getCroppedImageStyles({
+      x_percent: 10,
+      y_percent: 20,
+      width_percent: 50,
+      height_percent: 40,
+    });
+    expect(partial.frameClassName).toContain("step-image-frame-cropped");
+    expect(partial.imageStyle).toMatchObject({
+      position: "absolute",
+      left: 0,
+      top: 0,
+      maxWidth: "none",
+      transform: "translate(-10%, -20%)",
+      transformOrigin: "top left",
+    });
+    expect(partial.imageStyle.width).toBe("200%");
+    expect(partial.imageStyle.height).toBe("250%");
+  });
+
+  it("computes aspect ratio for image and crop variants", () => {
+    expect(getCropAspectRatio(0, 100, null)).toBeNull();
+    expect(getCropAspectRatio(200, 100, null)).toBe(2);
+    expect(
+      getCropAspectRatio(1000, 500, {
+        x_percent: 0,
+        y_percent: 0,
+        width_percent: 50,
+        height_percent: 50,
+      }),
+    ).toBe(2);
+    expect(
+      getCropAspectRatio(1000, 500, {
+        x_percent: 0,
+        y_percent: 0,
+        width_percent: 1,
+        height_percent: 50,
+      }),
+    ).toBe(2);
   });
 });

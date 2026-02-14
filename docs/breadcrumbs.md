@@ -274,3 +274,14 @@
 - Patched `src/components/StepItem.tsx` and `src/components/EditorStepCard.tsx` image tags with lazy/async decode attributes for lower initial load cost.
 - Added spec `docs/specs/2026-02-13-editor-crop-drag-performance.md`.
 - Verification: targeted tests (`EditorStepCard`, `StepItem`), full frontend tests, and build all pass.
+2026-02-14
+- Investigated pre-push blocker: `npm test:coverage` failed on 5 files due per-file thresholds.
+- Added/expanded frontend tests:
+  - `src/components/EditorWindow.test.tsx`
+  - `src/components/EditorStepCard.test.tsx`
+  - `src/components/SettingsSheet.test.tsx`
+  - `src/components/StepItem.test.tsx`
+  - `src/utils/stepCrop.test.ts`
+- Added spec: `docs/specs/2026-02-14-pre-push-coverage-gate.md`.
+- Verification completed with hook-equivalent command:
+  - `sh .githooks/pre-push.sh` (passes: clippy + test:coverage + tsc).

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import StepItem from "./StepItem";
@@ -203,5 +203,52 @@ describe("StepItem", () => {
     const marker = container.querySelector(".click-indicator") as HTMLElement;
     expect(marker.style.left).toBe("50%");
     expect(marker.style.top).toBe("50%");
+  });
+
+  it("uses explicit description when provided", () => {
+    render(
+      <StepItem
+        step={makeStep({ description: "Custom instruction", app: "Finder" })}
+        index={0}
+      />,
+    );
+    expect(screen.getByText("Custom instruction")).toBeInTheDocument();
+  });
+
+  it("renders drag handle when sortable is enabled", () => {
+    const { container } = render(
+      <StepItem step={makeStep()} index={0} sortable />,
+    );
+    expect(container.querySelector(".drag-handle")).toBeInTheDocument();
+  });
+
+  it("appends retry query on image load errors (including & branch)", async () => {
+    mockConvertFileSrc.mockReturnValue("asset://localhost/screenshot.png?seed=1");
+    render(<StepItem step={makeStep()} index={0} />);
+    const img = screen.getByAltText("Step 1");
+
+    expect(img).toHaveAttribute("src", "asset://localhost/screenshot.png?seed=1");
+    fireEvent.error(img);
+    await waitFor(() =>
+      expect(screen.getByAltText("Step 1")).toHaveAttribute(
+        "src",
+        "asset://localhost/screenshot.png?seed=1&retry=1",
+      ),
+    );
+
+    fireEvent.error(screen.getByAltText("Step 1"));
+    await waitFor(() =>
+      expect(screen.getByAltText("Step 1")).toHaveAttribute(
+        "src",
+        "asset://localhost/screenshot.png?seed=1&retry=2",
+      ),
+    );
+
+    fireEvent.error(screen.getByAltText("Step 1"));
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+    expect(screen.getByAltText("Step 1")).toHaveAttribute(
+      "src",
+      "asset://localhost/screenshot.png?seed=1&retry=2",
+    );
   });
 });
