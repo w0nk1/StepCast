@@ -285,3 +285,9 @@
 - Added spec: `docs/specs/2026-02-14-pre-push-coverage-gate.md`.
 - Verification completed with hook-equivalent command:
   - `sh .githooks/pre-push.sh` (passes: clippy + test:coverage + tsc).
+
+2026-02-14
+- Fixed CI Swift compile blocker (`no such module FoundationModels`) in `src-tauri/swift/stepcast_ai_helper.swift` via conditional import + guarded generation path.
+- Added unsupported availability fallback so `checkAvailability` reports unsupported instead of failing to compile on non-AI runners.
+- Added guarded generation fallback to baseline text with reason `model_unavailable_fallback`.
+- Re-ran hook-equivalent verification: `sh .githooks/pre-push.sh` passes locally.

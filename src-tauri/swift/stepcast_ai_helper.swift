@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(FoundationModels)
 import FoundationModels
+#endif
 
 struct AvailabilityResponse: Codable {
   let available: Bool
@@ -93,6 +95,16 @@ func writeStdout(_ data: Data) {
   FileHandle.standardOutput.write(Data("\n".utf8))
 }
 
+@inline(__always)
+func unsupportedModelAvailability() -> AvailabilityResponse {
+  AvailabilityResponse(
+    available: false,
+    reason: "unsupported",
+    details: "Apple Intelligence framework is not available on this system."
+  )
+}
+
+#if canImport(FoundationModels)
 func availabilityReasonCode(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
   switch reason {
   case .deviceNotEligible:
@@ -131,6 +143,11 @@ func checkAvailability() -> AvailabilityResponse {
     )
   }
 }
+#else
+func checkAvailability() -> AvailabilityResponse {
+  unsupportedModelAvailability()
+}
+#endif
 
 func generateDescriptions(_ req: GenerateRequest) async -> GenerateResponse {
   let maxChars = max(20, min(req.maxChars ?? 110, 140))
@@ -183,6 +200,7 @@ func generateDescriptions(_ req: GenerateRequest) async -> GenerateResponse {
         continue
       }
 
+      #if canImport(FoundationModels)
       let prompt = promptForStep(
         step,
         kind: kind,
@@ -204,6 +222,11 @@ func generateDescriptions(_ req: GenerateRequest) async -> GenerateResponse {
         label: grounding.label
       )
       let finalText = decision.text.isEmpty ? baseline : decision.text
+      #else
+      let candidate: String? = nil
+      let decision = (text: baseline, reason: "model_unavailable_fallback")
+      let finalText = baseline
+      #endif
       results.append(GenerateResultItem(
         id: step.id,
         text: finalText,

@@ -226,3 +226,7 @@
 2026-02-14 (pre-push-coverage-gate)
 - Default: keep strict per-file thresholds (`80/80/80/80`) and fix via targeted tests instead of lowering config; reason: preserves quality gate and prevents regressions on critical editor/crop flows.
 - Default: cover branch gaps through UI-level tests (RTL/Vitest) before considering instrumentation ignores; reason: executable behavior checks are more trustworthy than coverage-only annotations.
+
+2026-02-14 (swift-foundationmodels-ci-compat)
+- Default: compile AI helper with conditional `FoundationModels` import and feature guards (`#if canImport(FoundationModels)`); reason: keep CI/macOS runners without Apple Intelligence SDK buildable.
+- Default: when `FoundationModels` is unavailable, return deterministic baseline output with explicit reason (`model_unavailable_fallback`) instead of throwing/aborting; reason: preserve functional captures and editor flow without hard failure.
