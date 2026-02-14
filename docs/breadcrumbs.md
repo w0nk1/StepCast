@@ -65,3 +65,212 @@
 - Export WebP: added to_webp_or_png() + load_screenshot_optimized() helpers; HTML export uses dynamic MIME; Markdown export converts + writes correct extension.
 - Export WebP: removed unused load_screenshot_base64; all 142 Rust + 75 frontend tests pass; clippy clean.
 - PDF compression research: WKWebView.createPDF() has zero compression controls; WebP not in PDF spec (re-encoded to lossless = bloat); PDFKit macOS 13+ has saveAllImagesAsJPEG + optimizeImagesForScreen write options; Quartz filters work but need raw FFI; best approach = JPEG data URIs for PDF export + optional PDFKit post-processing. Spec at docs/specs/pdf-compression.md.
+
+2026-02-09
+- Apple Intelligence feasibility research: Foundation Models framework = on-device LLM (3B params, 2-bit), optimized for summarization/extraction/classification; not for deep reasoning/world knowledge.
+- API surface (Swift-first): guided generation (@Generable/@Guide), snapshot streaming, tool calling, stateful sessions; availability gating by Apple-Intelligence device + supported region/language; errors include guardrail violation, unsupported language, context/context-window exceeded.
+- Requirements: Apple Intelligence-capable hardware (Mac M1+), sufficient storage for model download, user must enable Apple Intelligence; Foundation Models framework availability appears tied to macOS 26+ (per Apple Newsroom + third-party Rust binding docs).
+- Mapped StepCast Step fields + AX click metadata (currently only logged) to text-only step description generation; noted that storing AX label/role in Step improves quality without Vision/OCR.
+- Drafted decision matrix: keep Tauri and integrate via small native Swift wrapper (plugin/XPC/CLI) vs hybrid host vs full Swift rewrite; recommendation: keep Tauri, add optional AI path.
+- User decision: ship Apple Intelligence descriptions only on macOS 26+ Apple Silicon; all other cases use deterministic fallback.
+- Research: Apple code-along shows availability cases `.deviceNotEligible`, `.appleIntelligenceNotEnabled`, `.modelNotReady` (+ unknown) via `SystemLanguageModel.default.availability`.
+- Research: adapter deployment requires a separate “FoundationModels Framework Adapter Entitlement”; irrelevant for v1 (default system model only).
+- Design: recommend global in-app toggle (default off) + tutorial note; system toggle lives in macOS Settings “Apple Intelligence & Siri”; no extra TCC permission for text-only descriptions.
+- Implemented: Settings -> Apple Intelligence section with global toggle + privacy note; added “Open Apple Intelligence & Siri Settings” button (deep link + fallback) and a new backend command `get_apple_intelligence_eligibility` (OS/arch check for macOS 26+ + Apple Silicon). Added Quick Start welcome banner bullet.
+- Research: scanned existing FoundationModels OSS usage; found bridge patterns (Swift sidecar JSON stdio, C ABI wrapper) + note that CLI tools may be more strictly rate limited than GUI apps.
+- UI: replaced plain checkbox with an Apple-style native switch using WebKit’s `<input type="checkbox" switch>` (fallback: checkbox when unsupported).
+- Fix: ensure the switch is visible/clickable in StepCast (exclude checkbox/switch inputs from text-input CSS; wrap row in a label to make the whole row clickable). Increased panel height to 640 to avoid Settings view scrolling.
+- Implemented Apple Intelligence step descriptions end-to-end:
+  - Added Swift sidecar helper `src-tauri/swift/stepcast_ai_helper.swift` (FoundationModels) compiled in `src-tauri/build.rs` and executed via JSON stdin/stdout.
+  - Added Tauri commands `update_step_description` + `generate_step_descriptions`; generation updates steps via `step-updated` events.
+  - Recorder: auto-generate missing descriptions after Stop when toggle enabled.
+  - Step Editor: toolbar `Enhance Steps`, per-step sparkle regenerate, inline manual description editing.
+  - Exports: prefer enhanced `step.description` via `effective_description` (HTML/Markdown/PDF).
+  - Settings: switch upgraded to custom Apple-style toggle; tray window auto-resizes for Settings (no scroll).
+- AI quality: added richer AX metadata (subrole/role_description/identifier/container_role) and improved Swift prompt with "UI kind" hints + deterministic baseline + quality gate (prevents vague "Click Finder." and non-tab "tab" hallucinations).
+- AI quality: added on-device Vision OCR on step screenshots (ROI around click) when labels are missing / right-clicks, so descriptions can include sidebar item names + filenames.
+- Fix: AI helper extraction now compares embedded bytes vs existing file (not only length) so updates reliably ship to `~/Library/Caches/com.w0nk1.stepcast/bin/stepcast_ai_helper`.
+- AI quality: AX click metadata is now kept even when the hit-test element has no label; label recovery scans AX children (depth-limited) to pull visible text from list rows (Finder sidebar/file list).
+- AI quality: right-click OCR grounding is filename-only (ignore context menu OCR) and Vision OCR switched to `.accurate` + smaller min text height.
+- AI quality: AX label extraction now prefers `AXTitleUIElement` + `AXPlaceholderValue` and avoids reading `AXValue` for text fields to prevent leaking user-entered content.
+- AI quality: Vision OCR click selection now strongly prefers candidates whose bounding box contains the click (and auto-detects bbox coordinate space vs ROI).
+- AI copy: text-field clicks are described as `Click ... field` (no implicit typing) since StepCast doesn’t record keystrokes.
+- UX: Settings window now auto-resizes to full content using `scrollHeight` + `ResizeObserver` (no Settings scroll).
+- UX: Apple Intelligence toggle now propagates between panel/editor via `ai-toggle-changed` Tauri event (storage event remains as fallback).
+- Verify: `npm test` + `cargo test` pass.
+
+2026-02-10
+- AI quality: AX click grounding now strongly prefers pressable elements (`AXPress`/`AXConfirm`) and attempts to recover labels from child `AXStaticText` on pressable groups; prevents “RustDesk in RustDesk” and improves window control (close) detection.
+- AI quality: store clicked element bounds as `step.ax.element_bounds` (percent) and use it to drive OCR ROI (fallback only); improves label accuracy for buttons/text fields without app-specific heuristics.
+- AI quality: ignore GUID/hex-like AX labels; prefer humanized `AXIdentifier` for grounding when available (e.g. emoji/sticker controls).
+- Capture: treat titleless overlay windows as `Popup` unless near menu bar; avoid top-of-screen region capture for in-app popovers; fixes cropped sticker picker screenshots.
+- Window controls: classify minimize/zoom via AX subrole/roleDescription and emit deterministic baseline (“Minimize the … window.”).
+- Verify: `npm test`, `cargo test`.
+- Packaging: Swift AI helper is now built into `src-tauri/bin/stepcast_ai_helper`, included as a Tauri bundle resource, and executed from the app bundle (no cache extraction).
+- Verify: `cargo build`, `cargo clippy -D warnings`, `cargo test`, `npm test`.
+- Verify: `npm test` + `cargo test` pass.
+- AI quality: for list/table/outline clicks, attempt to replace structural/metadata-heavy AX labels with the currently selected row/item label (AXSelectedRows/AXSelectedChildren); improves Finder file selection and chat list targets without per-app logic.
+- AI quality: list interactions can now be classified using container identifiers (table/list/outline/collection) even when the clicked element role is `AXButton`; improves verbs ("Select …") and reduces "sad" button descriptions.
+- AI quality: common structural labels ("editor area", "scroll area", "split view") are treated as generic and no longer used as grounding labels; reduces cryptic outputs in complex apps like Xcode.
+- Cleanup: fixed new clippy warnings in `src-tauri/src/export/pdf.rs` and `src-tauri/src/recorder/window_info/auth.rs`; ran `cargo fmt` and `cargo clippy -D warnings`.
+
+2026-02-11
+- Investigated capture regression with tiny snippets in `/Users/markus/Library/Caches/com.w0nk1.stepcast/sessions/8fd64097-bfaa-43b6-aefc-d691cdd0d2a9`; found menu-item steps captured via `window_id_capture` despite AX menu roles.
+- Fix: updated titleless overlay classification to allow overlay detection even when frontmost and capture window IDs match; keeps display-relative menu detection.
+- Fix: menu-role AX interactions now force region capture in top menu branch; avoids tiny menu-only screenshots.
+- Fix: popup overlays now union with the largest app window for clicked PID when available, then clamp to clicked display; improves context for picker/popover steps.
+- Verify: `cd src-tauri && cargo check -q` and targeted helper test `classify_titleless_overlay_window_dropdown_vs_popup` pass.
+- Follow-up hardening: restored conservative `same window_id => NotOverlay` classification to avoid false popup classification on titleless utility windows.
+- Follow-up hardening: extracted `should_use_menu_region_capture(...)` + tests; menu-role forcing is now explicitly top-region-gated.
+- Follow-up hardening: added `get_window_for_pid_at_click(...)` and use it for popup union context (fallback remains largest-PID window).
+- Follow-up hardening: added `exclude_window_id` to `get_window_for_pid_at_click(...)` and exclude the active popup window when resolving popup context.
+- Follow-up hardening: popup overlay branch now always captures via region (union bounds) instead of optional window-id capture.
+- Follow-up hardening: `get_window_for_pid_at_click(...)` now chooses the largest click-containing window to avoid selecting another small overlay in front.
+- Follow-up hardening: clamped Dock/menu/top-region capture bounds to clicked display; fixed small-display edge cases where fixed region width/height could exceed display and produce off-screen captures.
+- Verify: full suite green (`cargo test` 165 tests, `npm test` 126 tests).
+- 2026-02-11: audited latest 24-step session (`33edc9e4-d393-4952-bebf-3a8f22c12cf4`) with `scripts/session-ai-report.js` + manual screenshot review; confirmed recurring errors from generic/metadata AX labels (`Seitenleiste`, `Listendarstellung`, `2,4 MB`) and chat metadata labels.
+- 2026-02-11: patched Swift grounding heuristics (`stepcast_ai_helper_descriptions.swift`) to reject structural+metadata labels, improve comma-metadata segment extraction, and avoid wrong right-click labels when OCR has no filename target.
+- 2026-02-11: patched Vision OCR scoring (`stepcast_ai_helper_vision.swift`) to penalize metadata values and prefer filename OCR on list-item double-clicks.
+- 2026-02-11: patched Rust AX list heuristics (`src-tauri/src/recorder/ax_helpers.rs`) to treat sidebar/size/time labels as suspicious and reject those as selected-item targets; added regression tests.
+- 2026-02-11: auth placeholder UX copy updated across recorder/export/editor/timeline to `Authenticate with Touch ID or enter your password to continue.`.
+- 2026-02-11: verification passed (`swiftc -typecheck` for AI helper files, `npm test` 126/126, `cargo test` 167/167 + integration tests).
+- 2026-02-11: after replaying AI generation against latest request JSON, found identifier leak (`NS:8`) and fixed it by filtering implementation-style identifiers from Swift grounding.
+- 2026-02-11: improved OCR filename detection for truncated Finder names (`...` in middle) to recover the actual selected file row on double-click.
+- 2026-02-11: improved `ax_copy_selected_label` to prefer only semantic selected labels and continue searching descendants instead of returning first (often metadata) label.
+- 2026-02-11: deep-dive on latest regression session (`5f8c10ea-7bc0-468d-92fa-296fc7c5e11b`) + prior session (`33edc9e4-d393-4952-bebf-3a8f22c12cf4`) via `recording.log` and `session-ai-report.js`; found repeated false `attached_dialog_window` detections from unrelated apps.
+- 2026-02-11: hardened `src-tauri/src/recorder/window_info/topmost.rs` attached-dialog detection with owner validation + area-ratio constraints; added normalization tests for app-name matching.
+- 2026-02-11: hardened `src-tauri/src/recorder/pipeline/mod.rs` capture selection: normalized same-app checks + safe clicked-window reconciliation by click-point window lookup only.
+- 2026-02-11: verification complete: `cargo fmt`, `cargo test -p stepcast recorder::window_info::topmost -- --nocapture`, `cargo test -p stepcast recorder::pipeline -- --nocapture` all green.
+- 2026-02-11: analyzed newest 28-step session (`0a3241eb-3ccc-476d-a402-5f6f4d0b8309`); identified three regressions: menu-bar opener click ignored, open/save panel click captured as host window, and dialog captures too tightly cropped.
+- 2026-02-11: pipeline fix: stop dropping `AXMenuBarItem` clicks (keep ignoring `AXMenuButton` menu-open noise only).
+- 2026-02-11: pipeline fix: add foreign topmost dialog acceptance (overlap/containment-gated) to support helper-process dialogs (e.g., appkit open/save panels) without reintroducing unrelated behind-window captures.
+- 2026-02-11: pipeline fix: `is_sheet_dialog` now captures parent+dialog union; sheet fast-path now unions AX dialog area with frontmost parent window (display-clamped).
+- 2026-02-11: Swift AI fix: classify `AXMenu` as `menu item` so menu actions are phrased as "Choose ... from the menu".
+- 2026-02-11: verification: `cargo fmt`, `cargo test -p stepcast recorder::pipeline -- --nocapture` (40 pass), `swiftc -typecheck ...` (pass with existing non-blocking warning in vision file).
+- 2026-02-11: audited latest session `d60d83a7-b7c6-4648-9b6e-6e7b07b8e209` (`session-ai-report.js` + `recording.log`) and confirmed regressions at steps 16/21/26 (wrong list target + missing overlay context + low-confidence Arc label).
+- 2026-02-11: patched capture policy in `src-tauri/src/recorder/pipeline/mod.rs` + `helpers.rs` to introduce transient region-capture preference for volatile roles (`AXMenuItem`/`AXMenu`/`AXGroup`) and keep menu-region logic separate/tested.
+- 2026-02-11: added Rust regression tests in `src-tauri/src/recorder/pipeline/helpers.rs` for transient capture policy.
+- 2026-02-11: patched Swift OCR grounding in `stepcast_ai_helper_vision.swift` (no filename-forcing on generic list double-click) and `stepcast_ai_helper_descriptions.swift` (timestamp/date noise filtering + strict baseline fallback without trusted labels).
+- 2026-02-11: replay-validated AI generation locally against session request JSON (`ai-trace-1770817901597-request.json`): step-016 improved to `var 9`; step-026 now deterministic generic fallback (no hallucinated label).
+- 2026-02-11: verification passed: `cargo fmt --all`, `cargo test -p stepcast recorder::pipeline -- --nocapture` (42 pass), `swiftc -typecheck ...` (pass; existing non-blocking Vision warning unchanged).
+- 2026-02-11: fixed pipeline ordering bug in `src-tauri/src/recorder/pipeline/mod.rs`: `AXMenuButton` ignore now runs before `session.next_step_id()`/screenshot path allocation, preventing overwritten `step-XXX.png` files when menu-open is ignored.
+- 2026-02-11: re-verified after ordering fix: `cargo fmt --all`, `cargo test -p stepcast recorder::pipeline -- --nocapture` (45 pass), `swiftc -typecheck ...` (pass; existing non-blocking Vision warning unchanged).
+- 2026-02-11: analyzed regression session `82a47171-cc80-48c5-ac2c-736cc817b591`; found menu-bar clicks misclassified as window-controls (`window_control_fast_path`) and follow-up menu item clicks resolving to underlying `AXGroup` labels (`Today`) from Arc.
+- 2026-02-11: patched `src-tauri/src/recorder/pipeline/mod.rs` + `helpers.rs` with short-lived menu-followup state (`last_menu_bar_click_ms`), menu-role guard for window-control inference, forced `window_title=Menu` on menu-region captures, and tighter transient capture policy (`AXGroup` only for popup overlays).
+- 2026-02-11: patched `src-tauri/swift/stepcast_ai_helper_descriptions.swift` to classify `windowTitle=Menu` top clicks as menu items, improving verb selection (`Choose ... from the menu`).
+- 2026-02-11: patched `src-tauri/swift/stepcast_ai_helper_vision.swift` ROI selection to ignore weak `AXGroup` element bounds on day-like labels (`Today/Heute/...`) and use click-centered ROI.
+- 2026-02-11: verification after this patchset: `cargo fmt --all`, `cargo test -p stepcast recorder::pipeline -- --nocapture` (45 pass), `swiftc -typecheck ...` (pass; existing Vision warning unchanged).
+
+2026-02-12
+- Patched `src-tauri/swift/stepcast_ai_helper_descriptions.swift`: fixed checkbox toggle verb semantics (`checked=true` -> Disable), added file-kind label filtering, and improved OCR cleanup for slash artifacts in filenames.
+- Patched `src-tauri/swift/stepcast_ai_helper.swift`: deterministic baseline for menu/menu-bar/checkbox/window-control kinds; model-error fallback now returns baseline text instead of marking step as failed.
+- Patched `src-tauri/swift/stepcast_ai_helper_vision.swift`: improved list-row OCR selection (row-aligned semantic priority, metadata/file-kind penalties, clipped-vs-full variant preference).
+- Patched `src-tauri/src/recorder/ax_helpers.rs`: for list/outline clicks, try selected-row label more aggressively and retry once after a short delay to catch first-click selection updates.
+- Verification: `swiftc -typecheck ...` pass; helper replay on session `c9f4d328-c2c1-48b3-a119-63a97b510511` now has `FAILURES=0`; `cargo test -p stepcast recorder::ax_helpers -- --nocapture` pass (22/22).
+- Analyzed latest session `c39c68aa-de4f-4489-a5a5-4978b139e131` (`recording.log` + replay): confirmed foreign-overlay capture hijacks (`Grammarly Desktop`) and weak list labels (`Filme`, `hreibtisch`, clipped sidebar strings).
+- Patched `src-tauri/src/recorder/pipeline/mod.rs`: foreign topmost dialog capture now requires explicit AX dialog hints; prevents unrelated helper overlays from replacing the real click target.
+- Patched `src-tauri/swift/stepcast_ai_helper_descriptions.swift`: removed `Ohne Titel`/`Untitled` context suffix, filtered picker-category labels (`Emoji/GIF/Stickers/Today`) as non-targets for item clicks, tightened list-item label acceptance.
+- Patched `src-tauri/swift/stepcast_ai_helper_vision.swift`: added anti-sidebar-leak scoring for list OCR and expanded file-kind detection (plural/localized variants) to avoid column-kind hallucinations.
+- Replay check (`ai-trace-1770891651602-request.json`): improved outputs now include `Enable "WLAN" ...`, removed duplicate app suffix, downgraded unsafe guesses to generic (`Select the item ...`) for weak targets.
+- Verification: `swiftc -typecheck src-tauri/swift/stepcast_ai_helper.swift src-tauri/swift/stepcast_ai_helper_descriptions.swift src-tauri/swift/stepcast_ai_helper_vision.swift`; `cargo test -p stepcast recorder::pipeline -- --nocapture`; `cargo test -p stepcast recorder::ax_helpers -- --nocapture` all pass.
+- Added `docs/specs/2026-02-12-preclick-screencapturekit-buffer.md` and implemented macOS pre-click ScreenCaptureKit ring buffer in `src-tauri/src/recorder/pre_click_buffer.rs`.
+- Integrated pre-click fast-path into `src-tauri/src/recorder/pipeline/mod.rs` for volatile interactions (`prefer_transient_region_capture`) with unchanged fallback to existing capture paths.
+- Wired lifecycle in `src-tauri/src/lib.rs`: start buffer on recording start; stop/release on stop and discard; pass buffer handle into `pipeline::process_click(...)`.
+- Added `src-tauri/build.rs` linker rpath for `/usr/lib/swift` so test/dev binaries resolve Swift runtime dylibs without env overrides.
+- Verification: `cd src-tauri && cargo check -q` pass; `cd src-tauri && cargo test pre_click_buffer::tests::pick_frame -- --nocapture` pass; `cd src-tauri && cargo test -q recorder::pipeline -- --nocapture` pass (45 tests).
+- Updated `src-tauri/src/recorder/pipeline/mod.rs` to prefer pre-click full-display capture for standard clicks (`preclick_fullframe_capture`) before branch-specific window/menu logic.
+- Added stale-frame guard (`PRECLICK_MAX_AGE_MS=500`) and explicit debug logging for `ok/stale/unavailable/failed` pre-click fullframe outcomes.
+- Kept existing capture branches as fallback plus unchanged right-click/auth exceptions.
+- Verification: `cargo fmt --manifest-path src-tauri/Cargo.toml`, `cargo check --manifest-path src-tauri/Cargo.toml`, `cargo test --manifest-path src-tauri/Cargo.toml recorder::pipeline::tests::calculate_click_percent_in_middle -- --nocapture` all pass.
+- Patched `src-tauri/src/recorder/pre_click_buffer.rs`: `pick_frame_index(...)` now returns `None` when all buffered frames are newer than the click timestamp (no fallback to latest/future frame).
+- Patched `src-tauri/src/recorder/pipeline/mod.rs`: pre-click fullframe acceptance now requires `age_ms` in `0..=500` (negative/future frames rejected).
+- Verification: `cargo fmt --manifest-path src-tauri/Cargo.toml`, `cargo check --manifest-path src-tauri/Cargo.toml`, `cargo test --manifest-path src-tauri/Cargo.toml pre_click_buffer::tests::pick_frame -- --nocapture`, `cargo test --manifest-path src-tauri/Cargo.toml recorder::pipeline::tests::calculate_click_percent_in_middle -- --nocapture` all pass.
+- Audited session `d83599f5-b6fb-4b77-8ebe-66de91eb3eb6` via `scripts/session-ai-report.js` + `ai-trace-1770903867743-request/response.json`; confirmed capture path fixed (Poll menu present) but AI-label issues remained (`vat`, `Schreptisch`, `mixuino_errors @ öffnen`, icon glyph ``).
+- Patched `src-tauri/swift/stepcast_ai_helper_descriptions.swift`:
+  - keep `label == window_title` for list/sidebar contexts when container signals list semantics,
+  - strip OCR context-menu suffixes (`@ open/öffnen/...`),
+  - broaden context-menu phrase detection (`offnen`/`oeffnen` variants),
+  - canonicalize `Schreptisch` -> `Schreibtisch`,
+  - strip Private Use Area glyphs from labels,
+  - adjust `preferredVerb(...)` to prioritize actual user action (`Right-click`/`Double-click`/`Press`),
+  - refactor quality gate to return structured decision reason.
+- Patched `src-tauri/swift/stepcast_ai_helper.swift`: response now includes per-step debug payload (`kind`, `location`, `groundingLabel`, `groundingOcr`, `baseline`, `candidate`, `qualityGateReason`).
+- Patched `src-tauri/src/apple_intelligence/mod.rs`: Rust `GenerateResultItem` now accepts optional `debug` field.
+- Patched `src-tauri/src/lib.rs`: persist `ai_desc_debug` lines in `recording.log` for each generated result when debug payload is present.
+- Patched `scripts/session-ai-report.js`: render AI debug summary (`gate`, `label`, `ocr`, `baseline`, `candidate`) when available.
+- Verification:
+  - `cargo fmt --manifest-path src-tauri/Cargo.toml`
+  - `cargo check --manifest-path src-tauri/Cargo.toml`
+  - replayed helper on latest request JSON (`src-tauri/bin/stepcast_ai_helper generate < .../ai-trace-1770903867743-request.json`) and validated:
+    - `step-005`: `Select "Pepper"...` (no `vat`)
+    - `step-030`: `Select "Schreibtisch"...` (typo fixed)
+    - `step-031`: `Right-click "mixuino_errors"...` (no menu contamination)
+    - `step-008/009`: icon glyph removed (`Anonymous Voting` / `Multiple Answers`)
+- Follow-up (user preference): removed language-specific typo canonicalization from `src-tauri/swift/stepcast_ai_helper_descriptions.swift` (no correction list).
+- Follow-up (user preference): strengthened conservative gate to prefer baseline for `list item` / `item` / `button` / `text field` / `tab` whenever candidate differs (`qualityGateReason=prefer_baseline_for_kind`).
+- Re-verified replay on `ai-trace-1770903867743-request.json`: baseline-first behavior active; `step-005` remains stable (`Pepper`), `step-031` remains stable (`mixuino_errors`), and menu steps remain deterministic.
+- Round-2 hardening after reviewing newest session `859e5952-0510-4320-9645-5770a797502e`:
+  - Patched `classifyKind(...)` in `src-tauri/swift/stepcast_ai_helper_descriptions.swift` so `window_title=Menu` only forces `menu item` when AX role is menu-like; fixed false menu wording on `step-002`.
+  - Patched `isGenericUiLabel(...)` to treat `Popover Dismiss Region`/dismiss-region labels as generic; fixed technical identifier output on `step-016`.
+  - Patched list-item OCR gating for sidebar-side clicks (`x < 30%`): reject OCR-only non-filename labels; this intentionally prefers generic baseline over wrong specifics for Finder sidebar-like targets.
+  - Verification: `cargo check --manifest-path src-tauri/Cargo.toml` and replay against `ai-trace-1770979987150-request.json`:
+    - `step-002`: now `Click "Growbox – Home Assistant" in Arc.` (no false menu phrase)
+    - `step-016`: now `Click the item in WhatsApp.` (no `Popover Dismiss Region`)
+    - `step-021/022/023`: Poll flow still correct and stable
+    - `step-030/031/032`: now conservative generic list-item wording instead of wrong OCR names
+- Round-3 hardening (same session): added picker-interaction filter (`sticker`/`emoji`/`gif`/`picker` signals in AX metadata) to suppress OCR/identifier grounding for list items in picker grids.
+- Replay verification (`ai-trace-1770979987150-request.json`):
+  - `step-017` changed from `Select "BIRTH"...` to `Select the item in WhatsApp (Window).`
+  - Poll/menu steps unchanged and still deterministic.
+
+2026-02-13
+- Added spec `docs/specs/2026-02-13-step-crop-focus-system.md` describing non-destructive crop architecture and verification plan.
+- Added `crop_region` to step model (TS + Rust), plus session mutation `update_step_crop` and Tauri command wiring (`update_step_crop`) with permissions/capabilities updates.
+- Implemented recorder auto-focus crop heuristic in `src-tauri/src/recorder/pipeline/helpers.rs` and applied it in main pipeline only for display-sized captures.
+- Implemented editor crop UI using `react-image-crop` in `src/components/EditorStepCard.tsx` with Apply/Reset flow and optimistic state sync via `EditorWindow`.
+- Implemented preview marker remap + cropped rendering in `src/components/EditorStepCard.tsx`, `src/components/StepItem.tsx`, and `src/utils/stepCrop.ts`.
+- Implemented export crop application in `src-tauri/src/export/helpers.rs` and wired into HTML/Markdown paths (PDF inherits HTML path).
+- Added/updated tests: `src/utils/stepCrop.test.ts`, `src/components/StepItem.test.tsx`, `src/components/EditorStepCard.test.tsx`, and Rust crop/marker tests in export/pipeline/session modules.
+- Verification run completed: `npm test`, `npm run build`, `cd src-tauri && cargo test --quiet`, `cd src-tauri && cargo fmt`.
+- Follow-up after reviewing latest sessions/screenshots (`859e...`, `eb821...`): poll/menu captures are now present; biggest remaining readability gap was oversized full-screen-like sheet captures.
+- Patched `src-tauri/src/recorder/pipeline/helpers.rs` with `should_apply_focus_crop(...)` (display-coverage heuristic) and added regression test `should_apply_focus_crop_for_near_fullscreen_or_large_area`.
+- Patched `src-tauri/src/recorder/pipeline/mod.rs` to use focus-crop heuristic in:
+  - `sheet_fast_path` step creation
+  - `window_control_fast_path` step creation
+  - main step finalization (replacing exact-display-size gate)
+- Patched `src-tauri/src/recorder/pre_click_buffer.rs`: `TARGET_FPS` from `12` to `16`.
+- Patched `src-tauri/src/recorder/pipeline/mod.rs`: `PRECLICK_MAX_AGE_MS` from `500` to `250`.
+- Verification follow-up completed:
+  - `cd src-tauri && cargo fmt`
+  - `cd src-tauri && cargo test --quiet recorder::pipeline::helpers::tests::should_apply_focus_crop_for_near_fullscreen_or_large_area`
+  - `npm run -s test`
+  - `npm run -s build`
+  - `cd src-tauri && cargo test --quiet`
+2026-02-13
+- Investigated user-reported missing screenshots for latest recordings ("step 1+2, 4-7").
+- Audited sessions `eb82136b-81f3-44d5-846d-11b3086c434c` and `1fb5073d-0b71-41b4-8e47-61f191cedc28`: screenshot files exist on disk, valid PNGs, and recorder logs show captured paths for the affected step IDs.
+- Implemented frontend hardening: new `mergeUpdatedStep` in `src/utils/stepEvents.ts` and wired into `RecorderPanel` + `EditorWindow` so `step-updated` cannot accidentally drop previously-known screenshot paths.
+- Implemented UI image load hardening in `src/components/StepItem.tsx` and `src/components/EditorStepCard.tsx`: up to 2 delayed retries with cache-busting query on image load failure.
+- Added regression tests `src/utils/stepEvents.test.ts` for omitted/null screenshot update handling.
+- Verification run: `npm run -s test`, `npm run -s build`, `cd src-tauri && cargo test --quiet` all pass.
+2026-02-13
+- Investigated latest user repro: session `3c03f1c9-6d5c-4bcc-89cd-e613446eca47` has all `step-001..015.png` files present and valid; `recording.log` confirms `screenshot_path` emitted for every step.
+- Confirmed issue is editor crop rendering stability, not capture pipeline loss.
+- Patched `src/components/EditorStepCard.tsx`: crop rendering now independent of natural-size readiness, with stable frame fallback ratio and modal image onLoad size hydration.
+- Patched `src/editor.css`: wrapper/frame sizing adjusted to prevent collapse in cropped (absolute image) mode.
+- Added regression test in `src/components/EditorStepCard.test.tsx` for cropped frame visibility.
+- Added spec `docs/specs/2026-02-13-editor-crop-visibility-fix.md`.
+2026-02-13
+- Implemented direct crop reposition in editor overview (`src/components/EditorStepCard.tsx`): pointer-drag on cropped frame updates transient crop preview and persists once on pointer release.
+- Added drag-state guards (`moved` flag + latest crop tracking) so simple clicks do not trigger writes.
+- Added cursor/touch-action styling for draggable cropped frames in `src/editor.css`.
+- Added regression test in `src/components/EditorStepCard.test.tsx` verifying drag updates crop position and preserves crop size.
+- Verification: `npm run -s test -- src/components/EditorStepCard.test.tsx`, `npm run -s test`, `npm run -s build` all pass.
+2026-02-13
+- User-reported crop drag bug reproduced conceptually: native image drag ghost (`+` cursor) appeared while trying to reposition crop.
+- Patched `src/components/EditorStepCard.tsx` to suppress native drag, use pointer-driven crop drag only, and batch pointermove preview updates with `requestAnimationFrame`.
+- Added drag-commit epsilon to avoid writing crop updates on micro-jitter/no-op pointer interactions.
+- Patched `src/editor.css` with `-webkit-user-drag: none` + cropped-image pointer-event policy.
+- Patched `src/components/StepItem.tsx` and `src/components/EditorStepCard.tsx` image tags with lazy/async decode attributes for lower initial load cost.
+- Added spec `docs/specs/2026-02-13-editor-crop-drag-performance.md`.
+- Verification: targeted tests (`EditorStepCard`, `StepItem`), full frontend tests, and build all pass.

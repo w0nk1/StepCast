@@ -1,5 +1,8 @@
+use super::helpers::{
+    effective_description, html_escape, load_screenshot_optimized, marker_position_percent,
+    ImageTarget,
+};
 use crate::recorder::types::{ActionType, Step};
-use super::helpers::{action_description, html_escape, is_auth_placeholder, load_screenshot_optimized, ImageTarget};
 
 /// Generate a self-contained HTML document from steps.
 pub fn generate(title: &str, steps: &[Step]) -> String {
@@ -44,10 +47,12 @@ pub fn generate_for(title: &str, steps: &[Step], target: ImageTarget) -> String 
 }
 
 fn render_step(num: usize, step: &Step, target: ImageTarget) -> String {
-    let desc = html_escape(&action_description(step));
+    let desc = html_escape(&effective_description(step));
 
-    let image_html = step.screenshot_path.as_ref()
-        .and_then(|p| load_screenshot_optimized(p, target))
+    let image_html = step
+        .screenshot_path
+        .as_ref()
+        .and_then(|p| load_screenshot_optimized(p, target, step.crop_region.as_ref()))
         .map(|(b64, mime)| format!(r#"<img src="data:{mime};base64,{b64}" alt="Step {num}">"#))
         .unwrap_or_default();
 
@@ -57,16 +62,18 @@ fn render_step(num: usize, step: &Step, target: ImageTarget) -> String {
         _ => "click-marker",
     };
 
-    let click_marker = if step.screenshot_path.is_some() && !is_auth_placeholder(step) {
-        format!(
-            r#"<div class="{}" style="left: {}%; top: {}%;"></div>"#,
-            marker_class, step.click_x_percent, step.click_y_percent
-        )
-    } else {
-        String::new()
-    };
+    let click_marker = marker_position_percent(step)
+        .map(|(x, y)| {
+            format!(
+                r#"<div class="{}" style="left: {}%; top: {}%;"></div>"#,
+                marker_class, x, y
+            )
+        })
+        .unwrap_or_default();
 
-    let note_html = step.note.as_ref()
+    let note_html = step
+        .note
+        .as_ref()
         .map(|n| format!(r#"<p class="step-note">{}</p>"#, escape_text(n)))
         .unwrap_or_default();
 
@@ -145,15 +152,22 @@ mod tests {
             id: "s1".into(),
             ts: 0,
             action: ActionType::Click,
-            x: 10, y: 20,
+            x: 10,
+            y: 20,
             click_x_percent: 50.0,
             click_y_percent: 50.0,
             app: "Finder".into(),
             window_title: "Downloads".into(),
             screenshot_path: None,
             note: None,
+            description: None,
+            description_source: None,
+            description_status: None,
+            description_error: None,
+            ax: None,
             capture_status: None,
             capture_error: None,
+            crop_region: None,
         }
     }
 
@@ -266,11 +280,7 @@ mod tests {
         // Create a 1440x900 gradient screenshot
         let mut img = image::RgbaImage::new(1440, 900);
         for (x, y, pixel) in img.enumerate_pixels_mut() {
-            *pixel = image::Rgba([
-                ((x * 255) / 1440) as u8,
-                ((y * 255) / 900) as u8,
-                128, 255,
-            ]);
+            *pixel = image::Rgba([((x * 255) / 1440) as u8, ((y * 255) / 900) as u8, 128, 255]);
         }
         let img_path = tmp.path().join("screenshot.png");
         img.save(&img_path).unwrap();

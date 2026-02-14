@@ -32,7 +32,7 @@ function captureListeners(): ListenerMap {
   const listeners: ListenerMap = {};
   mockListen.mockImplementation(async (event, handler) => {
     listeners[event as string] = handler as (event: unknown) => void;
-    return vi.fn();
+    return () => {};
   });
   return listeners;
 }
@@ -41,7 +41,7 @@ describe("EditorWindow", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
     mockListen.mockReset();
-    mockListen.mockResolvedValue(vi.fn());
+    mockListen.mockResolvedValue(() => {});
   });
 
   it("shows empty state when no steps", async () => {

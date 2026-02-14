@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-generate-step-descriptions"
+description = "Enables the generate_step_descriptions command without any pre-configured scope."
+commands.allow = ["generate_step_descriptions"]
+
+[[permission]]
+identifier = "deny-generate-step-descriptions"
+description = "Denies the generate_step_descriptions command without any pre-configured scope."
+commands.deny = ["generate_step_descriptions"]

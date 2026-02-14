@@ -17,9 +17,51 @@ html, body {
 .editor-body {
   max-width: 860px;
   margin: 0 auto;
-  padding: 24px 32px 64px;
   height: 100%;
+  padding: 20px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 14px;
+  margin-bottom: 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-scroll {
+  flex: 1;
   overflow-y: auto;
+  padding-bottom: 64px;
+}
+
+.editor-toolbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editor-toolbar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.editor-toolbar-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.editor-toolbar-right .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .editor-empty {
@@ -141,8 +183,129 @@ html, body {
   padding: 14px 20px;
 }
 
-.editor-step-delete {
+.editor-step-desc-btn {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: text;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step-desc-btn:disabled {
+  cursor: default;
+  opacity: 0.92;
+}
+
+.editor-step-desc-btn:not(:disabled):hover {
+  text-decoration: underline;
+  text-decoration-color: rgba(124, 92, 252, 0.35);
+  text-underline-offset: 3px;
+}
+
+.editor-step-desc-input {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step-desc-input:focus {
+  border-color: var(--accent);
+}
+
+.editor-step-header-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-step-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.editor-step-pill.ai {
+  background: rgba(124, 92, 252, 0.12);
+  color: var(--accent);
+}
+
+.editor-step-pill.generating {
+  background: rgba(255, 149, 0, 0.16);
+  color: var(--warning);
+}
+
+.editor-step-pill.error {
+  background: rgba(255, 59, 48, 0.14);
+  color: var(--danger);
+}
+
+.editor-step-ai {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step-ai:hover:not(:disabled) {
+  background: rgba(124, 92, 252, 0.12);
+  color: var(--accent);
+}
+
+.editor-step-ai:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.editor-step-crop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step-crop:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.editor-step-delete {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -183,8 +346,9 @@ html, body {
 
 .editor-image-wrapper {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  width: min(100%, 760px);
+  margin: 0 auto;
   border-radius: 8px;
   overflow: hidden;
   box-shadow:
@@ -197,6 +361,118 @@ html, body {
   display: block;
   max-width: 100%;
   height: auto;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.editor-image-wrapper .step-image-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.editor-image-wrapper .step-image-frame-cropped {
+  position: relative;
+  width: 100%;
+  display: block;
+  overflow: hidden;
+}
+
+.editor-image-wrapper .step-image-frame-cropped.is-crop-draggable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.editor-image-wrapper .step-image-frame-cropped.is-crop-dragging {
+  cursor: grabbing;
+}
+
+.editor-image-wrapper .step-image-frame-cropped img {
+  max-width: none;
+  pointer-events: none;
+}
+
+.editor-image-wrapper .step-image-frame-cropped.is-crop-dragging img {
+  will-change: transform;
+}
+
+.editor-crop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.editor-crop-modal {
+  width: min(920px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-crop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-crop-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.editor-crop-close {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+}
+
+.editor-crop-close:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.editor-crop-body {
+  padding: 16px;
+  overflow: auto;
+}
+
+.editor-crop-body .ReactCrop {
+  max-height: calc(100vh - 220px);
+}
+
+.editor-crop-body .ReactCrop img {
+  max-width: 100%;
+  max-height: calc(100vh - 260px);
+  object-fit: contain;
+}
+
+.editor-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
 }
 
 /* Note row — below screenshot */

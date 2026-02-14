@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-apple-intelligence-eligibility"
+description = "Enables the get_apple_intelligence_eligibility command without any pre-configured scope."
+commands.allow = ["get_apple_intelligence_eligibility"]
+
+[[permission]]
+identifier = "deny-get-apple-intelligence-eligibility"
+description = "Denies the get_apple_intelligence_eligibility command without any pre-configured scope."
+commands.deny = ["get_apple_intelligence_eligibility"]

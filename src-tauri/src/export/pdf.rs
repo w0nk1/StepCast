@@ -11,8 +11,7 @@ fn optimize_pdf_bytes(pdf_bytes: &[u8]) -> Vec<u8> {
     use objc2::AnyThread;
     use objc2_foundation::{NSData, NSDictionary, NSNumber, NSString};
     use objc2_pdf_kit::{
-        PDFDocument, PDFDocumentOptimizeImagesForScreenOption,
-        PDFDocumentSaveImagesAsJPEGOption,
+        PDFDocument, PDFDocumentOptimizeImagesForScreenOption, PDFDocumentSaveImagesAsJPEGOption,
     };
 
     // Try to load as PDFDocument
@@ -78,8 +77,7 @@ fn render_pdf_on_main_thread(html: &str, output_path: &str, tx: mpsc::Sender<Res
     use objc2_core_foundation::{CGPoint, CGRect, CGSize};
     use objc2_foundation::{MainThreadMarker, NSData, NSError, NSObject, NSString};
     use objc2_web_kit::{
-        WKNavigationDelegate, WKNavigation, WKPDFConfiguration, WKWebView,
-        WKWebViewConfiguration,
+        WKNavigation, WKNavigationDelegate, WKPDFConfiguration, WKWebView, WKWebViewConfiguration,
     };
 
     // SAFETY: This function is only called from run_on_main_thread.
@@ -165,9 +163,8 @@ fn render_pdf_on_main_thread(html: &str, output_path: &str, tx: mpsc::Sender<Res
 
     let frame = CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(800.0, 600.0));
 
-    let webview = unsafe {
-        WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), frame, &config)
-    };
+    let webview =
+        unsafe { WKWebView::initWithFrame_configuration(WKWebView::alloc(mtm), frame, &config) };
 
     let delegate = NavDelegate::new(mtm, output_path.to_string(), tx);
 
@@ -202,7 +199,10 @@ mod tests {
     fn optimize_pdf_bytes_returns_original_on_invalid_input() {
         let garbage = b"not a real pdf";
         let result = optimize_pdf_bytes(garbage);
-        assert_eq!(result, garbage, "invalid input should return original bytes");
+        assert_eq!(
+            result, garbage,
+            "invalid input should return original bytes"
+        );
     }
 
     #[test]
@@ -223,7 +223,10 @@ mod tests {
             trailer<</Size 4/Root 1 0 R>>\nstartxref\n190\n%%EOF";
         let result = optimize_pdf_bytes(minimal_pdf);
         // Should return *some* valid bytes (possibly re-encoded, possibly original)
-        assert!(!result.is_empty(), "valid PDF should produce non-empty output");
+        assert!(
+            !result.is_empty(),
+            "valid PDF should produce non-empty output"
+        );
     }
 
     /// Creates a PDFDocument with a single image page for size testing.
@@ -257,9 +260,8 @@ mod tests {
 
         let page = unsafe { PDFPage::initWithImage(PDFPage::alloc(), &ns_image) }
             .expect("PDFPage from image");
-        let doc: objc2::rc::Retained<PDFDocument> = unsafe {
-            objc2::msg_send![PDFDocument::alloc(), init]
-        };
+        let doc: objc2::rc::Retained<PDFDocument> =
+            unsafe { objc2::msg_send![PDFDocument::alloc(), init] };
         unsafe { doc.insertPage_atIndex(&page, 0) };
 
         let raw = unsafe { doc.dataRepresentation() }.expect("PDF bytes");
@@ -307,9 +309,8 @@ mod tests {
         let obj5_offset = pdf.len();
         let content = format!("{w} 0 0 {h} 0 0 cm /Im0 Do");
         let content_len = content.len();
-        let obj5 = format!(
-            "5 0 obj\n<< /Length {content_len} >>\nstream\n{content}\nendstream\nendobj\n"
-        );
+        let obj5 =
+            format!("5 0 obj\n<< /Length {content_len} >>\nstream\n{content}\nendstream\nendobj\n");
         pdf.extend_from_slice(obj5.as_bytes());
 
         // Cross-reference table
@@ -317,18 +318,16 @@ mod tests {
         let xref = format!(
             "xref\n0 6\n\
              0000000000 65535 f \n\
-             {:010} 00000 n \n\
-             {:010} 00000 n \n\
-             {:010} 00000 n \n\
-             {:010} 00000 n \n\
-             {:010} 00000 n \n",
-            obj1_offset, obj2_offset, obj3_offset, obj4_offset, obj5_offset
+             {obj1_offset:010} 00000 n \n\
+             {obj2_offset:010} 00000 n \n\
+             {obj3_offset:010} 00000 n \n\
+             {obj4_offset:010} 00000 n \n\
+             {obj5_offset:010} 00000 n \n"
         );
         pdf.extend_from_slice(xref.as_bytes());
 
-        let trailer = format!(
-            "trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n"
-        );
+        let trailer =
+            format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n");
         pdf.extend_from_slice(trailer.as_bytes());
 
         pdf
@@ -369,7 +368,9 @@ mod tests {
             let n_kb = opt.len() / 1024;
             let pct = if !orig.is_empty() {
                 100.0 - (opt.len() as f64 / orig.len() as f64 * 100.0)
-            } else { 0.0 };
+            } else {
+                0.0
+            };
             let orig_str = String::from_utf8_lossy(orig);
             let dct = orig_str.contains("DCTDecode");
             let flate = orig_str.contains("FlateDecode");
@@ -410,8 +411,14 @@ mod tests {
             window_title: "Downloads".into(),
             screenshot_path: None,
             note: None,
+            description: None,
+            description_source: None,
+            description_status: None,
+            description_error: None,
+            ax: None,
             capture_status: None,
             capture_error: None,
+            crop_region: None,
         };
         let result = super::super::html::generate("Test", &[step]);
         assert!(result.contains("<!doctype html>"));
@@ -419,8 +426,8 @@ mod tests {
 
     #[test]
     fn pdf_html_uses_jpeg_not_webp() {
-        use crate::recorder::types::{ActionType, Step};
         use super::super::helpers::ImageTarget;
+        use crate::recorder::types::{ActionType, Step};
         use tempfile::TempDir;
 
         let tmp = TempDir::new().unwrap();
@@ -432,19 +439,32 @@ mod tests {
             id: "s1".into(),
             ts: 0,
             action: ActionType::Click,
-            x: 10, y: 20,
+            x: 10,
+            y: 20,
             click_x_percent: 50.0,
             click_y_percent: 50.0,
             app: "Finder".into(),
             window_title: "Downloads".into(),
             screenshot_path: Some(img_path.to_str().unwrap().to_string()),
             note: None,
+            description: None,
+            description_source: None,
+            description_status: None,
+            description_error: None,
+            ax: None,
             capture_status: None,
             capture_error: None,
+            crop_region: None,
         };
 
         let html = super::super::html::generate_for("Test", &[step], ImageTarget::Pdf);
-        assert!(html.contains("data:image/jpeg;base64,"), "PDF path should use JPEG");
-        assert!(!html.contains("data:image/webp;base64,"), "PDF path should not use WebP");
+        assert!(
+            html.contains("data:image/jpeg;base64,"),
+            "PDF path should use JPEG"
+        );
+        assert!(
+            !html.contains("data:image/webp;base64,"),
+            "PDF path should not use WebP"
+        );
     }
 }

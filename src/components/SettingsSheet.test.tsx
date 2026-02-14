@@ -124,6 +124,12 @@ describe("SettingsSheet", () => {
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("Report a Bug")).toBeInTheDocument();
   });
+
+  it("renders Apple-style switch control for Apple Intelligence toggle", () => {
+    render(<SettingsSheet onBack={vi.fn()} />);
+    const toggle = screen.getByLabelText("Apple Intelligence step descriptions");
+    expect(toggle).toHaveAttribute("role", "switch");
+  });
 });
 
 describe("initTheme", () => {

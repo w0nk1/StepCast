@@ -34,12 +34,14 @@ vi.mock("@tauri-apps/api/app", () => ({
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn(() => Promise.resolve(null)),
   convertFileSrc: vi.fn((path: string) => `asset://localhost/${path}`),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(vi.fn())),
+  emit: vi.fn(() => Promise.resolve()),
+  emitTo: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({

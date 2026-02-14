@@ -44,14 +44,18 @@ pub fn capture_region_fast(
     let bytes_per_row = image_ref.bytes_per_row() as usize;
     let bytes_per_pixel = (image_ref.bits_per_pixel() / 8) as usize;
     if bytes_per_pixel < 4 {
-        return Err(CaptureError::CgImage("unsupported pixel format".to_string()));
+        return Err(CaptureError::CgImage(
+            "unsupported pixel format".to_string(),
+        ));
     }
 
     let data = image_ref.data();
     let bytes = data.bytes();
     let needed = bytes_per_row.saturating_mul(h);
     if bytes.len() < needed {
-        return Err(CaptureError::CgImage("CGImage buffer too small".to_string()));
+        return Err(CaptureError::CgImage(
+            "CGImage buffer too small".to_string(),
+        ));
     }
 
     // CGWindowListCreateImage typically returns BGRA (premultiplied). Convert to RGBA.
@@ -86,10 +90,7 @@ pub fn capture_region_fast(
 /// Capture a specific window by its CGWindow ID using CoreGraphics.
 /// This captures the window content even if it's partially obscured or closing,
 /// avoiding race conditions where the window disappears before a region capture.
-pub fn capture_window_cg(
-    window_id: u32,
-    output_path: &Path,
-) -> Result<(), CaptureError> {
+pub fn capture_window_cg(window_id: u32, output_path: &Path) -> Result<(), CaptureError> {
     use core_graphics::geometry::{CGPoint, CGRect, CGSize};
     use core_graphics::window::{
         create_image, kCGWindowImageBestResolution, kCGWindowImageBoundsIgnoreFraming,
@@ -111,26 +112,34 @@ pub fn capture_window_cg(
         window_id,
         kCGWindowImageBestResolution | kCGWindowImageBoundsIgnoreFraming,
     )
-    .ok_or_else(|| CaptureError::CgImage("CGWindowListCreateImage returned null for window ID".to_string()))?;
+    .ok_or_else(|| {
+        CaptureError::CgImage("CGWindowListCreateImage returned null for window ID".to_string())
+    })?;
 
     let image_ref = image.as_ref();
     let w = image_ref.width() as usize;
     let h = image_ref.height() as usize;
     if w == 0 || h == 0 {
-        return Err(CaptureError::CgImage("empty CGImage for window capture".to_string()));
+        return Err(CaptureError::CgImage(
+            "empty CGImage for window capture".to_string(),
+        ));
     }
 
     let bytes_per_row = image_ref.bytes_per_row() as usize;
     let bytes_per_pixel = (image_ref.bits_per_pixel() / 8) as usize;
     if bytes_per_pixel < 4 {
-        return Err(CaptureError::CgImage("unsupported pixel format".to_string()));
+        return Err(CaptureError::CgImage(
+            "unsupported pixel format".to_string(),
+        ));
     }
 
     let data = image_ref.data();
     let bytes = data.bytes();
     let needed = bytes_per_row.saturating_mul(h);
     if bytes.len() < needed {
-        return Err(CaptureError::CgImage("CGImage buffer too small".to_string()));
+        return Err(CaptureError::CgImage(
+            "CGImage buffer too small".to_string(),
+        ));
     }
 
     let mut out = vec![0u8; w * h * 4];

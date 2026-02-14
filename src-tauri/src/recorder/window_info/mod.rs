@@ -1,15 +1,17 @@
 // Some functions are kept for potential future use
 #![allow(dead_code, unused_imports)]
 
-mod types;
 mod auth;
 mod query;
 mod topmost;
+mod types;
 
-pub use types::{WindowBounds, WindowError, WindowInfo};
 pub use auth::{find_auth_dialog_window, get_security_agent_window};
-pub use query::{get_frontmost_window, get_main_window_for_pid, get_window_at_click};
+pub use query::{
+    get_frontmost_window, get_main_window_for_pid, get_window_at_click, get_window_for_pid_at_click,
+};
 pub use topmost::{find_attached_dialog_window, get_topmost_window_at_point};
+pub use types::{WindowBounds, WindowError, WindowInfo};
 
 #[cfg(test)]
 mod tests {
@@ -31,9 +33,15 @@ mod tests {
     fn system_ui_filter_catches_dock() {
         assert!(super::super::ax_helpers::is_system_ui_process("Dock"));
         assert!(super::super::ax_helpers::is_system_ui_process("dock"));
-        assert!(super::super::ax_helpers::is_system_ui_process("WindowServer"));
-        assert!(super::super::ax_helpers::is_system_ui_process("SystemUIServer"));
-        assert!(super::super::ax_helpers::is_system_ui_process("ControlCenter"));
+        assert!(super::super::ax_helpers::is_system_ui_process(
+            "WindowServer"
+        ));
+        assert!(super::super::ax_helpers::is_system_ui_process(
+            "SystemUIServer"
+        ));
+        assert!(super::super::ax_helpers::is_system_ui_process(
+            "ControlCenter"
+        ));
     }
 
     #[test]

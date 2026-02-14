@@ -87,7 +87,12 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
-fn window_is_recent(cache: &WindowRecencyCache, window_id: u32, now_ms: i64, cfg: &AuthHeuristicConfig) -> bool {
+fn window_is_recent(
+    cache: &WindowRecencyCache,
+    window_id: u32,
+    now_ms: i64,
+    cfg: &AuthHeuristicConfig,
+) -> bool {
     if !cache.initialized {
         return false;
     }
@@ -97,7 +102,11 @@ fn window_is_recent(cache: &WindowRecencyCache, window_id: u32, now_ms: i64, cfg
     }
 }
 
-fn score_auth_candidate(candidate: &mut AuthWindowCandidate, cfg: &AuthHeuristicConfig, clicked_info_missing: bool) -> i32 {
+fn score_auth_candidate(
+    candidate: &mut AuthWindowCandidate,
+    cfg: &AuthHeuristicConfig,
+    clicked_info_missing: bool,
+) -> i32 {
     let mut score = 0;
 
     if candidate.layer >= cfg.layer_modal {
@@ -171,7 +180,10 @@ pub fn get_security_agent_window() -> Result<Option<WindowInfo>, WindowError> {
     let windows: Vec<CFDictionaryRef> = unsafe {
         let count = core_foundation::array::CFArrayGetCount(window_list as _);
         (0..count)
-            .map(|i| core_foundation::array::CFArrayGetValueAtIndex(window_list as _, i) as CFDictionaryRef)
+            .map(|i| {
+                core_foundation::array::CFArrayGetValueAtIndex(window_list as _, i)
+                    as CFDictionaryRef
+            })
             .collect()
     };
 
@@ -188,8 +200,7 @@ pub fn get_security_agent_window() -> Result<Option<WindowInfo>, WindowError> {
         let window_id = dict
             .find(window_id_key)
             .and_then(|v| {
-                let num: CFNumber =
-                    unsafe { CFNumber::wrap_under_get_rule(v.as_CFTypeRef() as _) };
+                let num: CFNumber = unsafe { CFNumber::wrap_under_get_rule(v.as_CFTypeRef() as _) };
                 num.to_i32().map(|n| n as u32)
             })
             .unwrap_or(0);
@@ -260,8 +271,7 @@ pub fn get_security_agent_window() -> Result<Option<WindowInfo>, WindowError> {
         let layer = dict
             .find(layer_key)
             .and_then(|v| {
-                let num: CFNumber =
-                    unsafe { CFNumber::wrap_under_get_rule(v.as_CFTypeRef() as _) };
+                let num: CFNumber = unsafe { CFNumber::wrap_under_get_rule(v.as_CFTypeRef() as _) };
                 num.to_i32()
             })
             .unwrap_or(0);
@@ -301,9 +311,12 @@ pub fn get_security_agent_window() -> Result<Option<WindowInfo>, WindowError> {
         if cfg!(debug_assertions) {
             eprintln!(
                 "Found security agent window: '{}' id={} bounds=({}, {}, {}x{})",
-                c.info.app_name, c.info.window_id,
-                c.info.bounds.x, c.info.bounds.y,
-                c.info.bounds.width, c.info.bounds.height
+                c.info.app_name,
+                c.info.window_id,
+                c.info.bounds.x,
+                c.info.bounds.y,
+                c.info.bounds.width,
+                c.info.bounds.height
             );
         }
     }
@@ -369,7 +382,10 @@ pub fn find_auth_dialog_window(
     let windows: Vec<CFDictionaryRef> = unsafe {
         let count = core_foundation::array::CFArrayGetCount(window_list as _);
         (0..count)
-            .map(|i| core_foundation::array::CFArrayGetValueAtIndex(window_list as _, i) as CFDictionaryRef)
+            .map(|i| {
+                core_foundation::array::CFArrayGetValueAtIndex(window_list as _, i)
+                    as CFDictionaryRef
+            })
             .collect()
     };
 
@@ -405,15 +421,35 @@ pub fn find_auth_dialog_window(
         let bounds_key = CFString::new("kCGWindowBounds");
         let bounds = match dict.find(bounds_key) {
             Some(v) => {
-                let bounds_dict: core_foundation::dictionary::CFDictionary<CFString, CFNumber> =
-                    unsafe { core_foundation::dictionary::CFDictionary::wrap_under_get_rule(v.as_CFTypeRef() as _) };
+                let bounds_dict: core_foundation::dictionary::CFDictionary<CFString, CFNumber> = unsafe {
+                    core_foundation::dictionary::CFDictionary::wrap_under_get_rule(
+                        v.as_CFTypeRef() as _
+                    )
+                };
 
-                let x = bounds_dict.find(CFString::new("X")).and_then(|n| n.to_i32()).unwrap_or(0);
-                let y = bounds_dict.find(CFString::new("Y")).and_then(|n| n.to_i32()).unwrap_or(0);
-                let width = bounds_dict.find(CFString::new("Width")).and_then(|n| n.to_i32()).unwrap_or(0) as u32;
-                let height = bounds_dict.find(CFString::new("Height")).and_then(|n| n.to_i32()).unwrap_or(0) as u32;
+                let x = bounds_dict
+                    .find(CFString::new("X"))
+                    .and_then(|n| n.to_i32())
+                    .unwrap_or(0);
+                let y = bounds_dict
+                    .find(CFString::new("Y"))
+                    .and_then(|n| n.to_i32())
+                    .unwrap_or(0);
+                let width = bounds_dict
+                    .find(CFString::new("Width"))
+                    .and_then(|n| n.to_i32())
+                    .unwrap_or(0) as u32;
+                let height = bounds_dict
+                    .find(CFString::new("Height"))
+                    .and_then(|n| n.to_i32())
+                    .unwrap_or(0) as u32;
 
-                WindowBounds { x, y, width, height }
+                WindowBounds {
+                    x,
+                    y,
+                    width,
+                    height,
+                }
             }
             None => continue,
         };
@@ -543,8 +579,10 @@ pub fn find_auth_dialog_window(
                     if candidate.layer > current.layer {
                         true
                     } else if candidate.layer == current.layer {
-                        let cand_area = candidate.info.bounds.width as u64 * candidate.info.bounds.height as u64;
-                        let cur_area = current.info.bounds.width as u64 * current.info.bounds.height as u64;
+                        let cand_area = candidate.info.bounds.width as u64
+                            * candidate.info.bounds.height as u64;
+                        let cur_area =
+                            current.info.bounds.width as u64 * current.info.bounds.height as u64;
                         cand_area > cur_area
                     } else {
                         false
@@ -597,10 +635,12 @@ mod tests {
 
     #[test]
     fn auth_candidate_scoring_balanced() {
-        let mut cfg = AuthHeuristicConfig::default();
-        cfg.layer_modal = 10;
-        cfg.layer_status = 5;
-        cfg.score_threshold = 6;
+        let cfg = AuthHeuristicConfig {
+            layer_modal: 10,
+            layer_status: 5,
+            score_threshold: 6,
+            ..Default::default()
+        };
 
         let mut candidate = AuthWindowCandidate {
             info: WindowInfo::sample(),
@@ -621,8 +661,10 @@ mod tests {
 
     #[test]
     fn window_recency_logic() {
-        let mut cfg = AuthHeuristicConfig::default();
-        cfg.recent_window_ms = 500;
+        let cfg = AuthHeuristicConfig {
+            recent_window_ms: 500,
+            ..Default::default()
+        };
 
         let cache = WindowRecencyCache {
             initialized: true,
