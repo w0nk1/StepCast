@@ -296,3 +296,9 @@
 - Release prep started on `main`: selected semver bump `0.3.0` (minor) based on feature scope.
 - `npm version minor` updated package/cargo versions but failed commit due repository guard requiring `src-tauri/Cargo.lock` staged with `Cargo.toml`.
 - Continued with manual git flow (stage lockfile + commit + tag) to satisfy guardrails.
+
+2026-02-14
+- Publish run `22020364415` failed on both targets.
+- x86_64 failure root cause: job executed on ARM runner image (`macos-15-arm64`) and linked ARM `screencapturekit` objects into x86 target.
+- aarch64 failure root cause: notarization rejected `Contents/Resources/bin/stepcast_ai_helper` (missing valid Developer ID signature + secure timestamp + hardened runtime).
+- Applied fixes: explicit helper codesign in `src-tauri/build.rs` and native-arch runner mapping in `.github/workflows/publish.yml`.

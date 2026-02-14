@@ -1,4 +1,6 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=APPLE_SIGNING_IDENTITY");
+
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         // Ensure Swift runtime dylibs required by ScreenCaptureKit bridge can be resolved
         // when running test binaries outside an app bundle.
@@ -124,5 +126,30 @@ fn build_swift_ai_helper() {
         use std::os::unix::fs::PermissionsExt;
         let perm = std::fs::Permissions::from_mode(0o755);
         let _ = std::fs::set_permissions(&resource_dst, perm);
+    }
+
+    // Notarization requires nested executables in the app bundle to be properly signed.
+    // Tauri signs app binaries, but custom resource executables need an explicit pass.
+    if let Ok(identity_raw) = std::env::var("APPLE_SIGNING_IDENTITY") {
+        let identity = identity_raw.trim();
+        if !identity.is_empty() {
+            let status = std::process::Command::new("codesign")
+                .arg("--force")
+                .arg("--sign")
+                .arg(identity)
+                .arg("--timestamp")
+                .arg("--options")
+                .arg("runtime")
+                .arg(&resource_dst)
+                .status()
+                .unwrap_or_else(|e| panic!("failed to run codesign for {}: {e}", resource_dst.display()));
+
+            if !status.success() {
+                panic!(
+                    "codesign failed for swift helper {} with status {status}",
+                    resource_dst.display()
+                );
+            }
+        }
     }
 }

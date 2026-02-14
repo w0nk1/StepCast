@@ -233,3 +233,6 @@
 
 2026-02-14 (release-versioning-default)
 - Default: bump to `0.3.0` (minor) for this merge set; reason: includes substantial new user-facing features (AI-assisted steps, crop editor, capture hardening), not a patch-only change.
+
+2026-02-14 (publish-runner-target-alignment)
+- Default: pin Publish matrix to native-arch runners (`aarch64 -> macos-15`, `x86_64 -> macos-13`) instead of `macos-latest` for both; reason: prevent cross-arch linker failures in `screencapturekit` artifacts.
