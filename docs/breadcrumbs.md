@@ -291,3 +291,8 @@
 - Added unsupported availability fallback so `checkAvailability` reports unsupported instead of failing to compile on non-AI runners.
 - Added guarded generation fallback to baseline text with reason `model_unavailable_fallback`.
 - Re-ran hook-equivalent verification: `sh .githooks/pre-push.sh` passes locally.
+
+2026-02-14
+- Release prep started on `main`: selected semver bump `0.3.0` (minor) based on feature scope.
+- `npm version minor` updated package/cargo versions but failed commit due repository guard requiring `src-tauri/Cargo.lock` staged with `Cargo.toml`.
+- Continued with manual git flow (stage lockfile + commit + tag) to satisfy guardrails.

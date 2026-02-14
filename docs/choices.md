@@ -230,3 +230,6 @@
 2026-02-14 (swift-foundationmodels-ci-compat)
 - Default: compile AI helper with conditional `FoundationModels` import and feature guards (`#if canImport(FoundationModels)`); reason: keep CI/macOS runners without Apple Intelligence SDK buildable.
 - Default: when `FoundationModels` is unavailable, return deterministic baseline output with explicit reason (`model_unavailable_fallback`) instead of throwing/aborting; reason: preserve functional captures and editor flow without hard failure.
+
+2026-02-14 (release-versioning-default)
+- Default: bump to `0.3.0` (minor) for this merge set; reason: includes substantial new user-facing features (AI-assisted steps, crop editor, capture hardening), not a patch-only change.
