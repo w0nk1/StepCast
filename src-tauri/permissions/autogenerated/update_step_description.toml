@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-step-description"
+description = "Enables the update_step_description command without any pre-configured scope."
+commands.allow = ["update_step_description"]
+
+[[permission]]
+identifier = "deny-update-step-description"
+description = "Denies the update_step_description command without any pre-configured scope."
+commands.deny = ["update_step_description"]

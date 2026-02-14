@@ -1,4 +1,4 @@
-use super::types::Step;
+use super::types::{BoundsPercent, DescriptionSource, DescriptionStatus, Step};
 use serde::Serialize;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -92,6 +92,60 @@ impl Session {
         Some(step)
     }
 
+    /// Update a step's crop region by ID. `None` resets to full image.
+    pub fn update_step_crop(
+        &mut self,
+        step_id: &str,
+        crop_region: Option<BoundsPercent>,
+    ) -> Option<&Step> {
+        let step = self.steps.iter_mut().find(|s| s.id == step_id)?;
+        step.crop_region = crop_region;
+        Some(step)
+    }
+
+    /// Set a step's manual description. Passing `None` clears the description and related metadata.
+    pub fn set_step_description_manual(
+        &mut self,
+        step_id: &str,
+        description: Option<String>,
+    ) -> Option<&Step> {
+        let step = self.steps.iter_mut().find(|s| s.id == step_id)?;
+        let desc = description
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        step.description = desc;
+        step.description_source = step.description.as_ref().map(|_| DescriptionSource::Manual);
+        step.description_status = None;
+        step.description_error = None;
+        Some(step)
+    }
+
+    /// Apply an AI-generated description to a step.
+    pub fn apply_step_description_ai(
+        &mut self,
+        step_id: &str,
+        description: String,
+    ) -> Option<&Step> {
+        let step = self.steps.iter_mut().find(|s| s.id == step_id)?;
+        let desc = description.trim().to_string();
+        if desc.is_empty() {
+            return None;
+        }
+        step.description = Some(desc);
+        step.description_source = Some(DescriptionSource::Ai);
+        step.description_status = Some(DescriptionStatus::Idle);
+        step.description_error = None;
+        Some(step)
+    }
+
+    /// Mark a step description generation as failed.
+    pub fn mark_step_description_failed(&mut self, step_id: &str, error: String) -> Option<&Step> {
+        let step = self.steps.iter_mut().find(|s| s.id == step_id)?;
+        step.description_status = Some(DescriptionStatus::Failed);
+        step.description_error = Some(error);
+        Some(step)
+    }
+
     /// Remove a step by ID. Returns true if found and removed.
     pub fn delete_step(&mut self, step_id: &str) -> bool {
         let before = self.steps.len();
@@ -174,8 +228,33 @@ mod tests {
         assert_eq!(updated.unwrap().note, None);
 
         // Nonexistent step
-        assert!(session.update_step_note("nonexistent", Some("x".into())).is_none());
+        assert!(session
+            .update_step_note("nonexistent", Some("x".into()))
+            .is_none());
 
+        std::fs::remove_dir_all(&session.temp_dir).ok();
+    }
+
+    #[test]
+    fn update_step_crop_sets_crop_region() {
+        let mut session = Session::new().expect("create session");
+        session.add_step(Step::sample());
+
+        let crop = BoundsPercent {
+            x_percent: 10.0,
+            y_percent: 20.0,
+            width_percent: 60.0,
+            height_percent: 50.0,
+        };
+        let updated = session.update_step_crop("step-1", Some(crop.clone()));
+        assert!(updated.is_some());
+        assert_eq!(updated.unwrap().crop_region, Some(crop));
+
+        let updated = session.update_step_crop("step-1", None);
+        assert!(updated.is_some());
+        assert_eq!(updated.unwrap().crop_region, None);
+
+        assert!(session.update_step_crop("missing", None).is_none());
         std::fs::remove_dir_all(&session.temp_dir).ok();
     }
 
@@ -186,7 +265,10 @@ mod tests {
         session.diagnostics.clicks_filtered = 3;
         session.diagnostics.captures_fallback = 1;
         session.diagnostics.captures_failed = 0;
-        session.diagnostics.failure_reasons.push("window capture produced empty file".into());
+        session
+            .diagnostics
+            .failure_reasons
+            .push("window capture produced empty file".into());
 
         session.write_diagnostics();
 
@@ -198,7 +280,10 @@ mod tests {
         assert_eq!(parsed["clicks_filtered"], 3);
         assert_eq!(parsed["captures_fallback"], 1);
         assert_eq!(parsed["captures_failed"], 0);
-        assert_eq!(parsed["failure_reasons"][0], "window capture produced empty file");
+        assert_eq!(
+            parsed["failure_reasons"][0],
+            "window capture produced empty file"
+        );
 
         // Cleanup
         std::fs::remove_dir_all(&session.temp_dir).ok();

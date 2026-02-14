@@ -11,8 +11,7 @@ use std::time::Duration;
 
 use core_foundation::runloop::{kCFRunLoopCommonModes, kCFRunLoopDefaultMode, CFRunLoop};
 use core_graphics::event::{
-    CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
-    EventField,
+    CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType, EventField,
 };
 
 use super::click_event::{ClickEvent, MouseButton};
@@ -85,7 +84,8 @@ impl ClickListener {
                 };
 
                 // Get click count (1 = single, 2 = double, 3 = triple)
-                let click_count = event.get_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE);
+                let click_count =
+                    event.get_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE);
 
                 let click_event =
                     ClickEvent::new(location.x as i32, location.y as i32, button, click_count);
@@ -102,7 +102,7 @@ impl ClickListener {
             Ok(tap) => tap,
             Err(()) => {
                 let _ = setup_tx.send(Err(
-                    "Failed to create event tap. Check accessibility permissions.".to_string()
+                    "Failed to create event tap. Check accessibility permissions.".to_string(),
                 ));
                 return;
             }
@@ -226,7 +226,11 @@ mod tests {
             Err(e) => {
                 // This is expected if accessibility permissions are not granted
                 println!("Click listener could not start (expected without permissions): {e}");
-                assert!(e.contains("accessibility") || e.contains("permission") || e.contains("event tap"));
+                assert!(
+                    e.contains("accessibility")
+                        || e.contains("permission")
+                        || e.contains("event tap")
+                );
             }
         }
     }

@@ -47,9 +47,9 @@ fn friendly_write_error(e: &std::io::Error, path: &str) -> String {
 fn validate_write_access(output_path: &str, estimated_bytes: u64) -> Result<(), String> {
     let path = Path::new(output_path);
 
-    let parent = path.parent().ok_or_else(|| {
-        format!("Invalid output path: \"{output_path}\"")
-    })?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("Invalid output path: \"{output_path}\""))?;
 
     if !parent.exists() {
         return Err(format!(
@@ -61,7 +61,9 @@ fn validate_write_access(output_path: &str, estimated_bytes: u64) -> Result<(), 
     // Probe writability: create a temp file in the same directory
     let probe_path = parent.join(format!(".stepcast_probe_{}", std::process::id()));
     match std::fs::File::create(&probe_path) {
-        Ok(_) => { let _ = std::fs::remove_file(&probe_path); }
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe_path);
+        }
         Err(e) => {
             let _ = std::fs::remove_file(&probe_path);
             return Err(match e.kind() {
@@ -118,7 +120,13 @@ fn available_disk_space(path: &str) -> std::io::Result<u64> {
 }
 
 /// Unified export: writes the given steps to output_path in the requested format.
-pub fn export(title: &str, steps: &[Step], format: ExportFormat, output_path: &str, app: &tauri::AppHandle) -> Result<(), String> {
+pub fn export(
+    title: &str,
+    steps: &[Step],
+    format: ExportFormat,
+    output_path: &str,
+    app: &tauri::AppHandle,
+) -> Result<(), String> {
     // Pre-validate before expensive work (~500KB per step estimate)
     let estimated_bytes = (steps.len() as u64) * 500_000 + 100_000;
     validate_write_access(output_path, estimated_bytes)?;
@@ -126,15 +134,10 @@ pub fn export(title: &str, steps: &[Step], format: ExportFormat, output_path: &s
     match format {
         ExportFormat::Html => {
             let content = html::generate(title, steps);
-            std::fs::write(output_path, content)
-                .map_err(|e| friendly_write_error(&e, output_path))
+            std::fs::write(output_path, content).map_err(|e| friendly_write_error(&e, output_path))
         }
-        ExportFormat::Markdown => {
-            markdown::write(title, steps, output_path)
-        }
-        ExportFormat::Pdf => {
-            pdf::write(title, steps, output_path, app)
-        }
+        ExportFormat::Markdown => markdown::write(title, steps, output_path),
+        ExportFormat::Pdf => pdf::write(title, steps, output_path, app),
     }
 }
 
@@ -144,9 +147,18 @@ mod tests {
 
     #[test]
     fn format_from_str_valid() {
-        assert!(matches!(ExportFormat::from_str("html"), Ok(ExportFormat::Html)));
-        assert!(matches!(ExportFormat::from_str("md"), Ok(ExportFormat::Markdown)));
-        assert!(matches!(ExportFormat::from_str("pdf"), Ok(ExportFormat::Pdf)));
+        assert!(matches!(
+            ExportFormat::from_str("html"),
+            Ok(ExportFormat::Html)
+        ));
+        assert!(matches!(
+            ExportFormat::from_str("md"),
+            Ok(ExportFormat::Markdown)
+        ));
+        assert!(matches!(
+            ExportFormat::from_str("pdf"),
+            Ok(ExportFormat::Pdf)
+        ));
     }
 
     #[test]

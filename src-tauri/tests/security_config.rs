@@ -6,8 +6,12 @@ fn tauri_conf_has_restrictive_csp_and_capabilities() {
     let json: Value = serde_json::from_str(raw).expect("parse tauri.conf.json");
 
     let security = &json["app"]["security"];
-    let csp = security["csp"].as_object().expect("csp should be an object");
-    let dev_csp = security["devCsp"].as_object().expect("devCsp should be an object");
+    let csp = security["csp"]
+        .as_object()
+        .expect("csp should be an object");
+    let dev_csp = security["devCsp"]
+        .as_object()
+        .expect("devCsp should be an object");
 
     let img_src = csp["img-src"].as_str().unwrap_or("");
     assert!(img_src.contains("asset:"), "csp img-src must allow asset:");
@@ -17,7 +21,10 @@ fn tauri_conf_has_restrictive_csp_and_capabilities() {
     );
 
     let connect_src = csp["connect-src"].as_str().unwrap_or("");
-    assert!(connect_src.contains("ipc:"), "csp connect-src must allow ipc:");
+    assert!(
+        connect_src.contains("ipc:"),
+        "csp connect-src must allow ipc:"
+    );
     assert!(
         connect_src.contains("http://ipc.localhost"),
         "csp connect-src must allow ipc.localhost"

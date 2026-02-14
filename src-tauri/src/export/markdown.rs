@@ -1,10 +1,10 @@
+use super::helpers::{effective_description, load_screenshot_optimized_image, ImageTarget};
 use crate::recorder::types::Step;
-use super::helpers::{action_description, to_webp_or_png};
 use std::fs;
 use std::io::{Cursor, Write as _};
 use std::path::Path;
-use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
+use zip::ZipWriter;
 
 /// Derive the images directory name from a stem.
 /// "My Guide" → "My Guide-images"
@@ -18,7 +18,12 @@ pub fn images_dir_name(output_path: &Path) -> String {
 
 /// Generate markdown content. `images_dir` is the relative folder name for images.
 /// `image_exts` maps step index (0-based) to file extension ("webp" or "png").
-pub fn generate_content(title: &str, steps: &[Step], images_dir: &str, image_exts: &[&str]) -> String {
+pub fn generate_content(
+    title: &str,
+    steps: &[Step],
+    images_dir: &str,
+    image_exts: &[&str],
+) -> String {
     let mut md = format!(
         "# {title} — {count} step{plural}\n\n",
         count = steps.len(),
@@ -27,7 +32,7 @@ pub fn generate_content(title: &str, steps: &[Step], images_dir: &str, image_ext
 
     for (i, step) in steps.iter().enumerate() {
         let num = i + 1;
-        let desc = action_description(step);
+        let desc = effective_description(step);
 
         md.push_str(&format!("## Step {num}\n\n"));
 
@@ -36,13 +41,14 @@ pub fn generate_content(title: &str, steps: &[Step], images_dir: &str, image_ext
         // Image reference (relative path into images dir)
         if step.screenshot_path.is_some() {
             let ext = image_exts.get(i).unwrap_or(&"png");
-            md.push_str(&format!("![Step {num}](<./{images_dir}/step-{num}.{ext}>)\n\n"));
+            md.push_str(&format!(
+                "![Step {num}](<./{images_dir}/step-{num}.{ext}>)\n\n"
+            ));
         }
 
         if let Some(note) = &step.note {
             md.push_str(&format!("> {note}\n\n"));
         }
-
     }
 
     md
@@ -60,16 +66,15 @@ pub fn write(title: &str, steps: &[Step], output_path: &str) -> Result<(), Strin
     let md_filename = format!("{stem}.md");
     let images_dir = images_dir_name(path);
 
-    let opts = SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     // Convert images and collect (bytes, extension) per step
     let mut converted: Vec<Option<(Vec<u8>, &str)>> = Vec::with_capacity(steps.len());
     for (i, step) in steps.iter().enumerate() {
         if let Some(src) = &step.screenshot_path {
-            let raw = fs::read(src)
-                .map_err(|e| format!("Failed to read screenshot {}: {e}", i + 1))?;
-            let img = to_webp_or_png(&raw);
+            let img =
+                load_screenshot_optimized_image(src, ImageTarget::Web, step.crop_region.as_ref())
+                    .ok_or_else(|| format!("Failed to read screenshot {}: {src}", i + 1))?;
             converted.push(Some((img.bytes, img.ext)));
         } else {
             converted.push(None);
@@ -108,8 +113,7 @@ pub fn write(title: &str, steps: &[Step], output_path: &str) -> Result<(), Strin
             .into_inner()
     };
 
-    fs::write(output_path, buf)
-        .map_err(|e| super::friendly_write_error(&e, output_path))?;
+    fs::write(output_path, buf).map_err(|e| super::friendly_write_error(&e, output_path))?;
 
     Ok(())
 }
@@ -125,27 +129,44 @@ mod tests {
             id: "s1".into(),
             ts: 0,
             action: ActionType::Click,
-            x: 10, y: 20,
+            x: 10,
+            y: 20,
             click_x_percent: 50.0,
             click_y_percent: 50.0,
             app: "Finder".into(),
             window_title: "Downloads".into(),
             screenshot_path: None,
             note: None,
+            description: None,
+            description_source: None,
+            description_status: None,
+            description_error: None,
+            ax: None,
             capture_status: None,
             capture_error: None,
+            crop_region: None,
         }
     }
 
     #[test]
     fn generate_contains_title() {
-        let md = generate_content("Test Guide", &[sample_step()], "test-guide-images", &["png"]);
+        let md = generate_content(
+            "Test Guide",
+            &[sample_step()],
+            "test-guide-images",
+            &["png"],
+        );
         assert!(md.starts_with("# Test Guide — "));
     }
 
     #[test]
     fn generate_contains_step_count() {
-        let md = generate_content("G", &[sample_step(), sample_step()], "g-images", &["png", "png"]);
+        let md = generate_content(
+            "G",
+            &[sample_step(), sample_step()],
+            "g-images",
+            &["png", "png"],
+        );
         assert!(md.contains("2 steps"));
     }
 
@@ -208,8 +229,8 @@ mod tests {
 
     #[test]
     fn write_creates_valid_zip() {
-        use tempfile::TempDir;
         use std::io::Cursor;
+        use tempfile::TempDir;
         use zip::ZipArchive;
 
         let tmp = TempDir::new().unwrap();
@@ -244,9 +265,10 @@ mod tests {
 
         assert!(names.contains(&"My Guide.md".to_string()));
         // Image could be webp or png depending on which is smaller
-        let has_image = names.iter().any(|n|
-            n.starts_with("My Guide-images/step-1.") && (n.ends_with(".webp") || n.ends_with(".png"))
-        );
+        let has_image = names.iter().any(|n| {
+            n.starts_with("My Guide-images/step-1.")
+                && (n.ends_with(".webp") || n.ends_with(".png"))
+        });
         assert!(has_image, "Expected image file in zip, got: {names:?}");
         assert_eq!(names.len(), 2);
 
@@ -257,7 +279,10 @@ mod tests {
         assert!(md_content.contains("# My Guide"));
         assert!(md_content.contains("2 steps"));
         // The image reference should match the actual file in the zip
-        let img_name = names.iter().find(|n| n.starts_with("My Guide-images/step-1.")).unwrap();
+        let img_name = names
+            .iter()
+            .find(|n| n.starts_with("My Guide-images/step-1."))
+            .unwrap();
         let ext = img_name.rsplit('.').next().unwrap();
         assert!(md_content.contains(&format!("step-1.{ext}")));
     }
@@ -265,8 +290,8 @@ mod tests {
     /// End-to-end: realistic 1440x900 screenshot → zip with WebP image + correct md reference
     #[test]
     fn write_zip_uses_webp_for_large_screenshot() {
-        use tempfile::TempDir;
         use std::io::Cursor;
+        use tempfile::TempDir;
         use zip::ZipArchive;
 
         let tmp = TempDir::new().unwrap();
@@ -274,12 +299,7 @@ mod tests {
         // Create a realistic 1440x900 gradient image
         let mut img = image::RgbaImage::new(1440, 900);
         for (x, y, pixel) in img.enumerate_pixels_mut() {
-            *pixel = image::Rgba([
-                ((x * 255) / 1440) as u8,
-                ((y * 255) / 900) as u8,
-                128,
-                255,
-            ]);
+            *pixel = image::Rgba([((x * 255) / 1440) as u8, ((y * 255) / 900) as u8, 128, 255]);
         }
         let img_path = tmp.path().join("screenshot.png");
         img.save(&img_path).unwrap();
@@ -312,7 +332,11 @@ mod tests {
             std::io::Read::read_to_end(&mut entry, &mut buf).unwrap();
             buf
         };
-        assert_eq!(&webp_bytes[..4], b"RIFF", "WebP must start with RIFF header");
+        assert_eq!(
+            &webp_bytes[..4],
+            b"RIFF",
+            "WebP must start with RIFF header"
+        );
         assert_eq!(&webp_bytes[8..12], b"WEBP", "WebP must contain WEBP marker");
 
         // Verify markdown references .webp
@@ -325,7 +349,9 @@ mod tests {
         assert!(md_content.contains("step-1.webp"));
 
         let webp_size = webp_bytes.len() as u64;
-        eprintln!("E2E: PNG={png_size}B → WebP={webp_size}B ({}% smaller)",
-            100 - (webp_size * 100 / png_size));
+        eprintln!(
+            "E2E: PNG={png_size}B → WebP={webp_size}B ({}% smaller)",
+            100 - (webp_size * 100 / png_size)
+        );
     }
 }

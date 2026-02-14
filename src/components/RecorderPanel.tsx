@@ -4,6 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { save, ask } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
@@ -14,6 +15,7 @@ import SettingsSheet from "./SettingsSheet";
 import WelcomeBanner from "./WelcomeBanner";
 import ReleaseNotes from "./ReleaseNotes";
 import type { Step } from "../types/step";
+import { mergeUpdatedStep } from "../utils/stepEvents";
 
 const SettingsIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
@@ -96,6 +98,9 @@ const COMMANDS = {
 
 type RecorderCommand = keyof typeof COMMANDS;
 
+const PANEL_SIZE = { width: 340, height: 640 };
+const SETTINGS_HEIGHT = 720;
+
 export default function RecorderPanel() {
   const [permissions, setPermissions] = useState<PermissionStatus | null>(null);
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -115,6 +120,50 @@ export default function RecorderPanel() {
   const permissionsReady = Boolean(
     permissions && permissions.screen_recording && permissions.accessibility,
   );
+
+  // Make Settings fully visible (no scroll) by resizing the tray panel window.
+  useEffect(() => {
+    const win = getCurrentWindow();
+    const setSize = (win as unknown as { setSize?: (size: LogicalSize) => Promise<void> }).setSize;
+    if (typeof setSize !== "function") {
+      // Unit tests mock getCurrentWindow() and may not provide setSize().
+      return;
+    }
+
+    const applySize = (height: number) => {
+      const clamped = Math.round(Math.max(320, Math.min(height, 940)));
+      setSize.call(win, new LogicalSize(PANEL_SIZE.width, clamped)).catch(() => {});
+    };
+
+    if (!showSettings) {
+      applySize(PANEL_SIZE.height);
+      return;
+    }
+
+    const compute = () => {
+      const h = Math.ceil(document.documentElement.scrollHeight);
+      applySize(Math.max(h, SETTINGS_HEIGHT));
+    };
+
+    // Initial sizing after layout.
+    const raf = requestAnimationFrame(compute);
+
+    if (typeof ResizeObserver === "undefined") {
+      const id = window.setInterval(compute, 250);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.clearInterval(id);
+      };
+    }
+
+    const ro = new ResizeObserver(() => compute());
+    ro.observe(document.documentElement);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [showSettings]);
 
   const refreshPermissions = useCallback(async () => {
     try {
@@ -242,7 +291,7 @@ export default function RecorderPanel() {
 
     listen<Step>("step-updated", (event) => {
       setSteps((prev) =>
-        prev.map((s) => (s.id === event.payload.id ? event.payload : s)),
+        prev.map((s) => (s.id === event.payload.id ? mergeUpdatedStep(s, event.payload) : s)),
       );
     }).then((fn) => unlisteners.push(fn));
 
@@ -277,6 +326,13 @@ export default function RecorderPanel() {
       }
       try {
         await invoke(COMMANDS[command]);
+        if (command === "stop") {
+          const ai = localStorage.getItem("appleIntelligenceDescriptions") === "true";
+          if (ai) {
+            // Fire-and-forget; progress is reflected via step-updated events.
+            invoke("generate_step_descriptions", { mode: "missing_only" }).catch(() => {});
+          }
+        }
         if (nextStatus) {
           setStatus(nextStatus);
         }

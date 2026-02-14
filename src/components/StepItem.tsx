@@ -1,8 +1,9 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Step } from "../types/step";
+import { getCroppedImageStyles, markerPositionForStep } from "../utils/stepCrop";
 
 type StepItemProps = {
   step: Step;
@@ -13,6 +14,7 @@ type StepItemProps = {
 
 export default memo(function StepItem({ step, index, onDelete, sortable }: StepItemProps) {
   const [confirming, setConfirming] = useState(false);
+  const [thumbRetry, setThumbRetry] = useState(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Click outside cancels confirmation
@@ -27,10 +29,22 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
     return () => document.removeEventListener("mousedown", handler);
   }, [confirming]);
 
-  // Convert local file path to tauri asset URL
-  const thumbnailSrc = step.screenshot_path
-    ? convertFileSrc(step.screenshot_path)
-    : null;
+  // Reset image retry state when the screenshot file changes.
+  useEffect(() => {
+    setThumbRetry(0);
+  }, [step.screenshot_path]);
+
+  // Convert local file path to tauri asset URL.
+  const thumbnailBaseSrc = useMemo(
+    () => (step.screenshot_path ? convertFileSrc(step.screenshot_path) : null),
+    [step.screenshot_path],
+  );
+  const thumbnailSrc = useMemo(() => {
+    if (!thumbnailBaseSrc) return null;
+    if (thumbRetry === 0) return thumbnailBaseSrc;
+    const sep = thumbnailBaseSrc.includes("?") ? "&" : "?";
+    return `${thumbnailBaseSrc}${sep}retry=${thumbRetry}`;
+  }, [thumbnailBaseSrc, thumbRetry]);
 
   const isAuthPlaceholder =
     step.window_title === "Authentication dialog (secure)" ||
@@ -43,6 +57,14 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
       : step.action === "RightClick"
         ? "click-indicator right-click"
         : "click-indicator";
+  const marker = markerPositionForStep(step);
+  const cropStyles = getCroppedImageStyles(step.crop_region);
+  const handleImageError = () => {
+    if (thumbRetry >= 2) return;
+    window.setTimeout(() => {
+      setThumbRetry((prev) => (prev < 2 ? prev + 1 : prev));
+    }, 120);
+  };
 
   // Action description
   const actionDesc =
@@ -52,9 +74,14 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
         ? "Right-clicked in"
         : "Clicked in";
 
+  const authDescription =
+    step.description && step.description.trim().length > 0
+      ? step.description.trim()
+      : "Authenticate with Touch ID or enter your password to continue.";
+
   const description = isAuthPlaceholder
-    ? "Authentication required (secure dialog)"
-    : `${actionDesc} ${step.app}`;
+    ? authDescription
+    : (step.description && step.description.trim().length > 0 ? step.description : `${actionDesc} ${step.app}`);
 
   const {
     attributes,
@@ -87,15 +114,25 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
       )}
       <div className="step-thumb">
         {thumbnailSrc && (
-          <img src={thumbnailSrc} alt={`Step ${index + 1}`} />
+          <div className={cropStyles.frameClassName}>
+            <img
+              src={thumbnailSrc}
+              alt={`Step ${index + 1}`}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              style={cropStyles.imageStyle}
+              onError={handleImageError}
+            />
+          </div>
         )}
         {/* Click indicator positioned using percentage */}
-        {!isAuthPlaceholder && (
+        {!isAuthPlaceholder && marker.visible && (
           <div
             className={markerClass}
             style={{
-              left: `${step.click_x_percent}%`,
-              top: `${step.click_y_percent}%`,
+              left: `${marker.xPercent}%`,
+              top: `${marker.yPercent}%`,
             }}
           />
         )}

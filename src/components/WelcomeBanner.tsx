@@ -24,6 +24,9 @@ export default function WelcomeBanner({ onDismiss }: WelcomeBannerProps) {
           Press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> from anywhere
         </li>
         <li>Right-click the icon for more options</li>
+        <li>
+          Optional: Apple Intelligence descriptions (on-device, macOS 26+, no step upload)
+        </li>
       </ul>
       <button className="button ghost welcome-dismiss" onClick={handleDismiss}>
         Got it

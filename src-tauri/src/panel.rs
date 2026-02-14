@@ -171,7 +171,9 @@ pub fn tray_icon_metrics(
     Err("no monitor found containing tray icon position".to_string())
 }
 
-pub fn panel_bounds(app_handle: &AppHandle) -> Result<crate::recorder::pipeline::PanelRect, String> {
+pub fn panel_bounds(
+    app_handle: &AppHandle,
+) -> Result<crate::recorder::pipeline::PanelRect, String> {
     let window = app_handle
         .get_webview_window(PANEL_LABEL)
         .ok_or_else(|| "panel window missing".to_string())?;
@@ -290,7 +292,7 @@ mod tests {
             .as_f64()
             .expect("height is number");
         let expected_width = 340.0;
-        let expected_height = 554.0;
+        let expected_height = 640.0;
 
         assert_eq!(width, expected_width);
         assert_eq!(height, expected_height);

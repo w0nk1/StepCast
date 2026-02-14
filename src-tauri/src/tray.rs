@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 use std::time::Duration;
 use tauri::image::Image;
-use tauri::path::BaseDirectory;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::path::BaseDirectory;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent, TrayIconId};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_nspanel::ManagerExt;
 
-use crate::panel::{panel_label, position_panel_at_tray_icon};
 use crate::panel::TrayIconMetrics;
+use crate::panel::{panel_label, position_panel_at_tray_icon};
 use crate::recorder::pipeline::PanelRect;
 
 const TRAY_ID: &str = "tray";
@@ -153,14 +153,19 @@ fn should_hide_panel(
 
 /// Set tray to recording state with red recording icon
 pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
-    let tray = app_handle.tray_by_id(&TrayIconId::new(TRAY_ID))
-        .ok_or_else(|| tauri::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "tray icon not found"
-        )))?;
+    let tray = app_handle
+        .tray_by_id(&TrayIconId::new(TRAY_ID))
+        .ok_or_else(|| {
+            tauri::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "tray icon not found",
+            ))
+        })?;
 
     // Load recording icon
-    let icon_path = app_handle.path().resolve("icons/recording.png", BaseDirectory::Resource)?;
+    let icon_path = app_handle
+        .path()
+        .resolve("icons/recording.png", BaseDirectory::Resource)?;
     let icon = Image::from_path(icon_path)?;
 
     tray.set_icon(Some(icon))?;
@@ -171,11 +176,14 @@ pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
 
 /// Reset tray to default state
 pub fn set_default_icon(app_handle: &AppHandle) -> tauri::Result<()> {
-    let tray = app_handle.tray_by_id(&TrayIconId::new(TRAY_ID))
-        .ok_or_else(|| tauri::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "tray icon not found"
-        )))?;
+    let tray = app_handle
+        .tray_by_id(&TrayIconId::new(TRAY_ID))
+        .ok_or_else(|| {
+            tauri::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "tray icon not found",
+            ))
+        })?;
 
     // Load default icon
     let icon_path = resolve_tray_icon_path(app_handle)?;
@@ -225,7 +233,8 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let icon = Image::from_path(tray_icon_path)?;
 
     let open = MenuItem::with_id(app_handle, "open", "Open StepCast", true, None::<&str>)?;
-    let quick_start = MenuItem::with_id(app_handle, "quick_start", "Quick Start", true, None::<&str>)?;
+    let quick_start =
+        MenuItem::with_id(app_handle, "quick_start", "Quick Start", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app_handle)?;
     let quit = MenuItem::with_id(app_handle, "quit", "Quit StepCast", true, None::<&str>)?;
     let menu = Menu::with_items(app_handle, &[&open, &quick_start, &sep, &quit])?;
@@ -462,7 +471,10 @@ mod tests {
             size: Size::Logical((16.0, 12.0).into()),
         };
 
-        assert_eq!(rect_debug(&rect), "logical pos=(10.00,20.00) size=(16.00x12.00)");
+        assert_eq!(
+            rect_debug(&rect),
+            "logical pos=(10.00,20.00) size=(16.00x12.00)"
+        );
     }
 
     #[test]

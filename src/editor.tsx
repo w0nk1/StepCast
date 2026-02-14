@@ -4,6 +4,7 @@ import EditorWindow from "./components/EditorWindow";
 import { initTheme } from "./components/SettingsSheet";
 import "./App.css";
 import "./editor.css";
+import "react-image-crop/dist/ReactCrop.css";
 
 initTheme();
 

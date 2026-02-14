@@ -29,6 +29,7 @@ pub struct PipelineState {
     pub last_tray_click: Option<TrayClick>,
     pub panel_state: PanelState,
     pub last_auth_prompt: Option<(u32, i64)>,
+    pub last_menu_bar_click_ms: Option<i64>,
 }
 
 impl PipelineState {
@@ -39,6 +40,7 @@ impl PipelineState {
             last_tray_click: None,
             panel_state: PanelState::new(),
             last_auth_prompt: None,
+            last_menu_bar_click_ms: None,
         }
     }
 
@@ -87,19 +89,13 @@ impl PanelState {
 
 impl TrayRect {
     pub fn contains(&self, x: i32, y: i32) -> bool {
-        x >= self.x
-            && x < self.x + self.width
-            && y >= self.y
-            && y < self.y + self.height
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 }
 
 impl PanelRect {
     pub fn contains(&self, x: i32, y: i32) -> bool {
-        x >= self.x
-            && x < self.x + self.width
-            && y >= self.y
-            && y < self.y + self.height
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
     }
 }
 
@@ -127,7 +123,9 @@ impl fmt::Display for PipelineError {
             PipelineError::ScreenshotFailed(msg) => write!(f, "screenshot failed: {msg}"),
             PipelineError::OwnAppClick => write!(f, "click on own app"),
             PipelineError::DebouncedClick => write!(f, "click debounced (too fast)"),
-            PipelineError::UpgradedToDblClick => write!(f, "upgraded previous step to double-click"),
+            PipelineError::UpgradedToDblClick => {
+                write!(f, "upgraded previous step to double-click")
+            }
             PipelineError::IgnoredMenuOpen => write!(f, "ignored menu open click"),
         }
     }
