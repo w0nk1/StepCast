@@ -239,3 +239,6 @@
 
 2026-02-15 (publish-runner-label-correction)
 - Default: use `macos-15-intel` for x86_64 publish jobs; reason: `macos-13` label is unsupported on current GitHub-hosted runner pool for this repo.
+
+2026-02-15 (release-provenance-clean-cut)
+- Default: cut `v0.3.1` from latest `main` instead of publishing `v0.3.0` draft produced via workflow_dispatch commit mismatch; reason: keep tag, source, and artifacts strictly aligned.

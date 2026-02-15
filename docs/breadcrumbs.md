@@ -306,3 +306,7 @@
 2026-02-15
 - Publish workflow_dispatch run `22036855959` showed immediate x86_64 runner-label failure (`macos-13-us-default` unsupported).
 - Updated Publish matrix label from `macos-13` to `macos-15-intel` for `x86_64-apple-darwin`.
+
+2026-02-15
+- Confirmed publish run `22037041331` succeeded and produced both arch assets for draft `v0.3.0`, but release metadata remained tied to prior dispatch context (`targetCommitish` mismatch).
+- Chose clean provenance path: prepare fresh version/tag `0.3.1` from current `main`.
