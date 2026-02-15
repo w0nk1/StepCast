@@ -26,7 +26,7 @@ jobs:
           - platform: macos-15
             target: aarch64-apple-darwin
             arch_label: aarch64
-          - platform: macos-13
+          - platform: macos-15-intel
             target: x86_64-apple-darwin
             arch_label: x64
     runs-on: ${{ matrix.platform }}

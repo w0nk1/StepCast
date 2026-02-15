@@ -302,3 +302,7 @@
 - x86_64 failure root cause: job executed on ARM runner image (`macos-15-arm64`) and linked ARM `screencapturekit` objects into x86 target.
 - aarch64 failure root cause: notarization rejected `Contents/Resources/bin/stepcast_ai_helper` (missing valid Developer ID signature + secure timestamp + hardened runtime).
 - Applied fixes: explicit helper codesign in `src-tauri/build.rs` and native-arch runner mapping in `.github/workflows/publish.yml`.
+
+2026-02-15
+- Publish workflow_dispatch run `22036855959` showed immediate x86_64 runner-label failure (`macos-13-us-default` unsupported).
+- Updated Publish matrix label from `macos-13` to `macos-15-intel` for `x86_64-apple-darwin`.
