@@ -77,6 +77,14 @@ describe("SettingsSheet", () => {
     expect(mockEmit).toHaveBeenCalledWith("language-changed", { language: "de" });
   });
 
+  it("passes selected app language to Apple Intelligence eligibility check", async () => {
+    localStorage.setItem("appLanguage", "de");
+    renderSettings();
+    expect(mockInvoke).toHaveBeenCalledWith("get_apple_intelligence_eligibility", {
+      appLanguage: "de",
+    });
+  });
+
   it("sets data-theme and localStorage when selecting a theme", async () => {
     const user = userEvent.setup();
     renderSettings();

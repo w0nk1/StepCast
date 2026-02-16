@@ -122,7 +122,9 @@ fn macos_product_version() -> Option<String> {
 }
 
 #[tauri::command]
-fn get_apple_intelligence_eligibility() -> AppleIntelligenceEligibility {
+fn get_apple_intelligence_eligibility(
+    app_language: Option<String>,
+) -> AppleIntelligenceEligibility {
     let arch = std::env::consts::ARCH;
 
     #[cfg(not(target_os = "macos"))]
@@ -136,6 +138,7 @@ fn get_apple_intelligence_eligibility() -> AppleIntelligenceEligibility {
 
     #[cfg(target_os = "macos")]
     {
+        let locale = i18n::resolve_locale(i18n::parse_app_language(app_language.as_deref()));
         let version = macos_product_version();
         let platform_details = version
             .as_ref()
@@ -145,7 +148,7 @@ fn get_apple_intelligence_eligibility() -> AppleIntelligenceEligibility {
         if arch != "aarch64" {
             return AppleIntelligenceEligibility {
                 eligible: false,
-                reason: "Requires Apple Silicon (M1+).".to_string(),
+                reason: i18n::ai_eligibility_requires_apple_silicon(locale).to_string(),
                 details: platform_details,
             };
         }
@@ -157,7 +160,7 @@ fn get_apple_intelligence_eligibility() -> AppleIntelligenceEligibility {
         if major.is_none() {
             return AppleIntelligenceEligibility {
                 eligible: false,
-                reason: "Could not detect macOS version.".to_string(),
+                reason: i18n::ai_eligibility_unknown_macos_version(locale).to_string(),
                 details: platform_details,
             };
         }
@@ -165,49 +168,46 @@ fn get_apple_intelligence_eligibility() -> AppleIntelligenceEligibility {
         if major.unwrap_or(0) < 26 {
             return AppleIntelligenceEligibility {
                 eligible: false,
-                reason: "Requires macOS 26+.".to_string(),
+                reason: i18n::ai_eligibility_requires_macos_26(locale).to_string(),
                 details: platform_details,
             };
         }
 
-        let availability =
-            match crate::apple_intelligence::availability(Some(crate::i18n::system_locale())) {
-                Ok(a) => a,
-                Err(err) => {
-                    return AppleIntelligenceEligibility {
-                        eligible: false,
-                        reason: "Could not check Apple Intelligence availability.".to_string(),
-                        details: Some(format!(
-                            "{}; {}",
-                            platform_details.unwrap_or_else(|| format!("macos (unknown) ({arch})")),
-                            err
-                        )),
-                    };
-                }
-            };
+        let availability = match crate::apple_intelligence::availability(Some(locale)) {
+            Ok(a) => a,
+            Err(err) => {
+                return AppleIntelligenceEligibility {
+                    eligible: false,
+                    reason: i18n::ai_eligibility_check_failed(locale).to_string(),
+                    details: Some(format!(
+                        "{}; {}",
+                        platform_details.unwrap_or_else(|| format!("macos (unknown) ({arch})")),
+                        err
+                    )),
+                };
+            }
+        };
 
         if availability.available {
             return AppleIntelligenceEligibility {
                 eligible: true,
-                reason: "Available.".to_string(),
+                reason: i18n::ai_eligibility_available(locale).to_string(),
                 details: platform_details,
             };
         }
 
         let reason = match availability.reason.as_deref() {
             Some("appleIntelligenceNotEnabled") => {
-                "Apple Intelligence is disabled in System Settings.".to_string()
+                i18n::ai_eligibility_not_enabled(locale).to_string()
             }
             Some("deviceNotEligible") => {
-                "This device is not eligible for Apple Intelligence.".to_string()
+                i18n::ai_eligibility_device_not_eligible(locale).to_string()
             }
-            Some("modelNotReady") => {
-                "Apple Intelligence model is not ready yet (downloading/initializing).".to_string()
-            }
+            Some("modelNotReady") => i18n::ai_eligibility_model_not_ready(locale).to_string(),
             _ => availability
                 .details
                 .clone()
-                .unwrap_or_else(|| "Apple Intelligence unavailable.".to_string()),
+                .unwrap_or_else(|| i18n::ai_eligibility_unavailable(locale).to_string()),
         };
 
         let mut details = platform_details;

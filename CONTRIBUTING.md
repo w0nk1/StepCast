@@ -16,6 +16,12 @@ Thanks for your interest in contributing!
 - `npm run i18n:check` should pass for locale changes
 - Use [conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`)
 
+## Review Automation
+
+- CI (`.github/workflows/ci.yml`) is the required merge gate for PRs
+- Codex review follow-up is automated via `.github/workflows/codex-feedback-loop.yml`
+- If you want to trigger codex fixes manually on a PR, comment `/codex-fix` on that PR
+
 ## Translations
 
 - Source locale is `src/i18n/locales/en.json`

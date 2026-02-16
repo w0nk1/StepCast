@@ -63,7 +63,7 @@ export function initTheme() {
 }
 
 export default function SettingsSheet({ onBack }: SettingsSheetProps) {
-  const { appLanguage, availableLocales, setAppLanguage, getLanguageLabel, t } = useI18n();
+  const { appLanguage, locale, availableLocales, setAppLanguage, getLanguageLabel, t } = useI18n();
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem("theme") as Theme) || "system"
   );
@@ -89,7 +89,10 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
   }, [appLanguage]);
 
   useEffect(() => {
-    invoke<AiEligibility | null>("get_apple_intelligence_eligibility")
+    const eligibilityLanguage = appLanguage === "system" ? locale : appLanguage;
+    invoke<AiEligibility | null>("get_apple_intelligence_eligibility", {
+      appLanguage: eligibilityLanguage,
+    })
       .then((result) => {
         if (result && typeof result.eligible === "boolean" && typeof result.reason === "string") {
           setAiEligibility(result);
@@ -98,7 +101,7 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
         }
       })
       .catch(() => setAiEligibility({ eligible: false, reason: t("settings.ai.eligibility.fallback") }));
-  }, [t]);
+  }, [appLanguage, locale, t]);
 
   const selectTheme = useCallback((t: Theme) => {
     setTheme(t);

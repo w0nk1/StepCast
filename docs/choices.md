@@ -268,3 +268,8 @@
 - Default: language selection UI uses a dropdown (`<select>`) instead of segmented pills; reason: scales for many locales and avoids crowded/overflowing controls as translators add languages.
 - Default: language options are sourced from dynamically discovered locale catalogs (`availableLocales`) plus `system`; reason: contributor flow should be "add locale file only" with no UI code edits.
 - Default: cross-webview `language-changed` handling validates locale via `isSupportedAppLanguage` instead of hardcoded `en/de`; reason: runtime should automatically accept newly added locale files.
+
+2026-02-16 (codex-review-loop-and-eligibility-locale-fix)
+- Default: codex feedback automation is follow-up-by-comment (`@codex address that feedback`) with dedupe markers, not direct auto-commit from workflow; reason: keeps human oversight and avoids unsafe write automation in CI context.
+- Default: codex follow-up workflow supports three entry points (codex review submit, `/codex-fix` comment, manual dispatch); reason: reliable trigger paths for both automatic and operator-driven remediation.
+- Default: Apple Intelligence eligibility uses selected app language (resolved `en|de`) instead of backend `system_locale`; reason: prevents mixed-language eligibility reasons in localized Settings UI.

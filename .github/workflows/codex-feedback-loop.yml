@@ -1,0 +1,142 @@
+name: Codex Feedback Loop
+
+on:
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to process (required for manual runs)"
+        required: true
+        type: string
+      review_id:
+        description: "Optional review id (limits findings to one review)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  request-codex-fix:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.user.login == 'chatgpt-codex-connector[bot]' &&
+       github.event.review.state == 'commented') ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/codex-fix'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR and review context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR="${{ inputs.pr_number }}"
+            REVIEW_ID="${{ inputs.review_id }}"
+          elif [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            PR="${{ github.event.pull_request.number }}"
+            REVIEW_ID="${{ github.event.review.id }}"
+          else
+            PR="${{ github.event.issue.number }}"
+            REVIEW_ID=""
+          fi
+
+          if [ -z "$PR" ]; then
+            echo "Missing PR number."
+            exit 1
+          fi
+
+          STATE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
+          echo "pr_number=$PR" >> "$GITHUB_OUTPUT"
+          echo "review_id=$REVIEW_ID" >> "$GITHUB_OUTPUT"
+          echo "pr_state=$STATE" >> "$GITHUB_OUTPUT"
+
+      - name: Stop if PR is not open
+        if: steps.ctx.outputs.pr_state != 'OPEN'
+        run: echo "PR #${{ steps.ctx.outputs.pr_number }} is not open; skipping."
+
+      - name: Collect codex findings
+        if: steps.ctx.outputs.pr_state == 'OPEN'
+        id: findings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+          REVIEW_ID: ${{ steps.ctx.outputs.review_id }}
+        run: |
+          if [ -n "$REVIEW_ID" ]; then
+            RAW=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews/$REVIEW_ID/comments" --paginate)
+            FINDINGS=$(echo "$RAW" | jq '[.[] | select(.user.login=="chatgpt-codex-connector[bot]")]')
+          else
+            RAW=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/comments" --paginate)
+            FINDINGS=$(echo "$RAW" | jq '[.[] | select(.user.login=="chatgpt-codex-connector[bot]")]')
+          fi
+
+          COUNT=$(echo "$FINDINGS" | jq 'length')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No codex review findings."
+            exit 0
+          fi
+
+          SUMMARY=$(echo "$FINDINGS" | jq -r '
+            .[:5]
+            | map("- `" + (.path // "unknown") + ":" + ((.line // 0) | tostring) + "` " + (.body | gsub("\\n"; " ") | .[0:180]))
+            | join("\n")
+          ')
+
+          {
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prevent duplicate autofix request
+        if: steps.ctx.outputs.pr_state == 'OPEN' && steps.findings.outputs.count != '0'
+        id: dedupe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+          REVIEW_ID: ${{ steps.ctx.outputs.review_id }}
+        run: |
+          MARKER="<!-- codex-autofix:pr-${PR_NUMBER}:review-${REVIEW_ID:-latest} -->"
+          FOUND=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n 1 || true)
+          echo "marker=$MARKER" >> "$GITHUB_OUTPUT"
+          if [ -n "$FOUND" ]; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ask codex to apply feedback
+        if: steps.ctx.outputs.pr_state == 'OPEN' && steps.findings.outputs.count != '0' && steps.dedupe.outputs.already != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+          MARKER: ${{ steps.dedupe.outputs.marker }}
+          SUMMARY: ${{ steps.findings.outputs.summary }}
+          COUNT: ${{ steps.findings.outputs.count }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(cat <<EOF
+$MARKER
+Codex review findings detected ($COUNT item(s)).
+
+@codex address that feedback
+
+Top findings:
+$SUMMARY
+EOF
+)"
+
+      - name: No-op summary
+        if: steps.ctx.outputs.pr_state == 'OPEN' && (steps.findings.outputs.count == '0' || steps.dedupe.outputs.already == 'true')
+        run: |
+          echo "No new codex autofix request posted."
