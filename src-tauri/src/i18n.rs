@@ -164,6 +164,69 @@ pub fn auth_placeholder_description(locale: Locale) -> &'static str {
     }
 }
 
+pub fn ai_eligibility_requires_apple_silicon(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Requires Apple Silicon (M1+).",
+        Locale::De => "Erfordert Apple Silicon (M1+).",
+    }
+}
+
+pub fn ai_eligibility_unknown_macos_version(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Could not detect macOS version.",
+        Locale::De => "macOS-Version konnte nicht erkannt werden.",
+    }
+}
+
+pub fn ai_eligibility_requires_macos_26(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Requires macOS 26+.",
+        Locale::De => "Erfordert macOS 26+.",
+    }
+}
+
+pub fn ai_eligibility_check_failed(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Could not check Apple Intelligence availability.",
+        Locale::De => "Apple-Intelligence-Verfugbarkeit konnte nicht gepruft werden.",
+    }
+}
+
+pub fn ai_eligibility_available(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Available.",
+        Locale::De => "Verfugbar.",
+    }
+}
+
+pub fn ai_eligibility_not_enabled(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Apple Intelligence is disabled in System Settings.",
+        Locale::De => "Apple Intelligence ist in den Systemeinstellungen deaktiviert.",
+    }
+}
+
+pub fn ai_eligibility_device_not_eligible(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "This device is not eligible for Apple Intelligence.",
+        Locale::De => "Dieses Gerat ist nicht fur Apple Intelligence geeignet.",
+    }
+}
+
+pub fn ai_eligibility_model_not_ready(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Apple Intelligence model is not ready yet (downloading/initializing).",
+        Locale::De => "Apple-Intelligence-Modell ist noch nicht bereit (Download/Initialisierung).",
+    }
+}
+
+pub fn ai_eligibility_unavailable(locale: Locale) -> &'static str {
+    match locale {
+        Locale::En => "Apple Intelligence unavailable.",
+        Locale::De => "Apple Intelligence ist nicht verfugbar.",
+    }
+}
+
 pub fn tray_tooltip(_locale: Locale) -> &'static str {
     "StepCast"
 }
@@ -249,6 +312,22 @@ mod tests {
         assert_eq!(
             tray_recording_tooltip(Locale::De),
             "StepCast - Aufnahme läuft..."
+        );
+    }
+
+    #[test]
+    fn ai_eligibility_helpers_render_translated_strings() {
+        assert_eq!(
+            ai_eligibility_requires_apple_silicon(Locale::En),
+            "Requires Apple Silicon (M1+)."
+        );
+        assert_eq!(
+            ai_eligibility_requires_apple_silicon(Locale::De),
+            "Erfordert Apple Silicon (M1+)."
+        );
+        assert_eq!(
+            ai_eligibility_not_enabled(Locale::De),
+            "Apple Intelligence ist in den Systemeinstellungen deaktiviert."
         );
     }
 }

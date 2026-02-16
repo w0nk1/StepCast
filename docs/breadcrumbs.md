@@ -373,3 +373,9 @@
 - Added select styling in `src/App.css` and adjusted settings tests to combobox interaction in `src/components/SettingsSheet.test.tsx`.
 - Updated contributor docs in `CONTRIBUTING.md` to document auto-discovery of new locale JSON files.
 - Verification: `npm test` (255/255), `npm run i18n:check`, `npm run build`.
+2026-02-16
+- Reviewed codex feedback on PR #6 and fixed mixed-language eligibility path: `src/components/SettingsSheet.tsx` now sends resolved `appLanguage` to `get_apple_intelligence_eligibility`; `src-tauri/src/lib.rs` resolves and applies that locale to Apple Intelligence availability checks/reasons.
+- Added localized backend eligibility string helpers in `src-tauri/src/i18n.rs` plus unit coverage.
+- Added reusable review playbook command `.cursor/commands/pr-review.md` (OpenUsage-style process adapted for StepCast).
+- Added codex follow-up automation workflow `.github/workflows/codex-feedback-loop.yml` (auto on codex review, manual `/codex-fix`, workflow_dispatch) with dedupe marker comments.
+- Updated `CONTRIBUTING.md` with review automation usage and added spec `docs/specs/2026-02-16-codex-feedback-loop.md`.
