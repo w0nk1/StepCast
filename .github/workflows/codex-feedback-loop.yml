@@ -55,9 +55,10 @@ jobs:
           fi
 
           if [ -z "$REVIEW_ID" ]; then
-            REVIEW_ID=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" --paginate --jq '
+            REVIEW_ID=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" --paginate --slurp | jq -r '
               [
                 .[]
+                | .[]
                 | select(
                     .user.login == "chatgpt-codex-connector[bot]"
                     and .state == "COMMENTED"

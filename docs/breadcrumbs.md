@@ -382,3 +382,7 @@
 2026-02-16
 - Applied codex follow-up fix for workflow dedupe edge case: `.github/workflows/codex-feedback-loop.yml` now resolves latest concrete codex `review_id` when manual triggers (`/codex-fix` or `workflow_dispatch`) omit it.
 - Result: dedupe marker keys by real review id instead of static `review-latest`, so later manual runs are no longer blocked after earlier autofix comments.
+2026-02-16
+- Reviewed PR #8 codex feedback and fixed remaining pagination edge case in `.github/workflows/codex-feedback-loop.yml`: review lookup now uses `gh api --paginate --slurp | jq -r ...` and flattens pages before selecting latest codex review id.
+- Added regression coverage `src/utils/codexFeedbackWorkflow.test.ts` to guard against reintroducing paginated lookup without `--slurp`.
+- Added focused spec `docs/specs/2026-02-16-codex-feedback-loop-review-id-pagination.md`.

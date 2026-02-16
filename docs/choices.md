@@ -274,3 +274,6 @@
 - Default: codex follow-up workflow supports three entry points (codex review submit, `/codex-fix` comment, manual dispatch); reason: reliable trigger paths for both automatic and operator-driven remediation.
 - Default: Apple Intelligence eligibility uses selected app language (resolved `en|de`) instead of backend `system_locale`; reason: prevents mixed-language eligibility reasons in localized Settings UI.
 - Default: when manual `/codex-fix` or `workflow_dispatch` omits `review_id`, resolve the latest concrete codex review id before dedupe; reason: avoid static `review-latest` marker collisions and allow later manual reruns for new findings.
+
+2026-02-16 (codex-review-id-pagination-slurp)
+- Default: paginated codex review lookup uses `gh api --paginate --slurp | jq -r ...` with page flattening before selecting latest review id; reason: `--paginate --jq` without slurp can emit one id per page and corrupt `review_id` step output on long-lived PRs, while `gh` does not allow combining `--slurp` and `--jq`.
