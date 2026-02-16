@@ -4,6 +4,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Step } from "../types/step";
 import { getCroppedImageStyles, markerPositionForStep } from "../utils/stepCrop";
+import { useI18n } from "../i18n";
 
 type StepItemProps = {
   step: Step;
@@ -13,6 +14,7 @@ type StepItemProps = {
 };
 
 export default memo(function StepItem({ step, index, onDelete, sortable }: StepItemProps) {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
   const [thumbRetry, setThumbRetry] = useState(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -69,15 +71,15 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
   // Action description
   const actionDesc =
     step.action === "DoubleClick"
-      ? "Double-clicked in"
+      ? t("step.action.double_clicked_in")
       : step.action === "RightClick"
-        ? "Right-clicked in"
-        : "Clicked in";
+        ? t("step.action.right_clicked_in")
+        : t("step.action.clicked_in");
 
   const authDescription =
     step.description && step.description.trim().length > 0
       ? step.description.trim()
-      : "Authenticate with Touch ID or enter your password to continue.";
+      : t("step.auth.default");
 
   const description = isAuthPlaceholder
     ? authDescription
@@ -101,7 +103,7 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
   return (
     <div className="step-item" ref={setNodeRef} style={style} {...attributes}>
       {sortable && (
-        <button className="drag-handle" {...listeners} title="Drag to reorder">
+        <button className="drag-handle" {...listeners} title={t("step.drag_reorder_title")}>
           <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
             <circle cx="3" cy="2" r="1.5"/>
             <circle cx="7" cy="2" r="1.5"/>
@@ -117,7 +119,7 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
           <div className={cropStyles.frameClassName}>
             <img
               src={thumbnailSrc}
-              alt={`Step ${index + 1}`}
+              alt={t("step.image_alt", { num: index + 1 })}
               loading="lazy"
               decoding="async"
               draggable={false}
@@ -138,7 +140,7 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
         )}
       </div>
       <div className="step-content">
-        <span className="step-number">Step {index + 1}</span>
+        <span className="step-number">{t("step.number", { num: index + 1 })}</span>
         <span className="step-desc">{description}</span>
       </div>
       {onDelete && (
@@ -152,7 +154,7 @@ export default memo(function StepItem({ step, index, onDelete, sortable }: StepI
               setConfirming(true);
             }
           }}
-          title={confirming ? "Confirm delete" : "Remove step"}
+          title={confirming ? t("step.delete.confirm_title") : t("step.delete.remove_title")}
         >
           {confirming ? (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

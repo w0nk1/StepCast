@@ -1,3 +1,4 @@
+use crate::i18n::Locale;
 use crate::recorder::types::Step;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -17,6 +18,8 @@ pub struct GenerateRequest {
     pub steps: Vec<Step>,
     #[serde(default)]
     pub max_chars: Option<usize>,
+    #[serde(default)]
+    pub app_language: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,19 +130,32 @@ fn run_helper(_args: &[&str], _stdin: Option<&[u8]>) -> Result<Vec<u8>, String> 
     Err("not supported on this platform".into())
 }
 
-pub fn availability() -> Result<AvailabilityResponse, String> {
-    let out = run_helper(&["availability"], None)?;
+pub fn availability(locale: Option<Locale>) -> Result<AvailabilityResponse, String> {
+    let mut args = vec!["availability"];
+    if let Some(locale) = locale {
+        args.push("--lang");
+        args.push(match locale {
+            Locale::En => "en",
+            Locale::De => "de",
+        });
+    }
+    let out = run_helper(&args, None)?;
     serde_json::from_slice(&out).map_err(|e| format!("parse availability json: {e}"))
 }
 
 pub fn generate_descriptions(
     steps: Vec<Step>,
     max_chars: usize,
+    locale: Locale,
 ) -> Result<GenerateResponse, String> {
     // Keep the Swift helper API stable: snake_case JSON.
     let req = GenerateRequest {
         steps,
         max_chars: Some(max_chars),
+        app_language: Some(match locale {
+            Locale::En => "en".to_string(),
+            Locale::De => "de".to_string(),
+        }),
     };
     let input = serde_json::to_vec(&req).map_err(|e| format!("encode generate json: {e}"))?;
     let out = run_helper(&["generate"], Some(&input))?;

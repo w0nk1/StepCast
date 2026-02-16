@@ -16,6 +16,7 @@ import WelcomeBanner from "./WelcomeBanner";
 import ReleaseNotes from "./ReleaseNotes";
 import type { Step } from "../types/step";
 import { mergeUpdatedStep } from "../utils/stepEvents";
+import { useI18n } from "../i18n";
 
 const SettingsIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
@@ -75,11 +76,11 @@ type PermissionStatus = {
 
 type RecorderStatus = "idle" | "recording" | "paused" | "stopped";
 
-const STATUS_LABELS: Record<RecorderStatus, string> = {
-  idle: "Ready",
-  recording: "Recording",
-  paused: "Paused",
-  stopped: "Stopped",
+const STATUS_LABEL_KEYS: Record<RecorderStatus, string> = {
+  idle: "status.ready",
+  recording: "status.recording",
+  paused: "status.paused",
+  stopped: "status.stopped",
 };
 
 const STATUS_TONES: Record<RecorderStatus, "quiet" | "active" | "warn"> = {
@@ -102,6 +103,7 @@ const PANEL_SIZE = { width: 340, height: 640 };
 const SETTINGS_HEIGHT = 720;
 
 export default function RecorderPanel() {
+  const { t, appLanguage, locale } = useI18n();
   const [permissions, setPermissions] = useState<PermissionStatus | null>(null);
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -313,10 +315,10 @@ export default function RecorderPanel() {
       return [] as string[];
     }
     const missing = [] as string[];
-    if (!permissions.screen_recording) missing.push("Screen Recording");
-    if (!permissions.accessibility) missing.push("Accessibility");
+    if (!permissions.screen_recording) missing.push(t("recorder.permissions.screen_recording"));
+    if (!permissions.accessibility) missing.push(t("recorder.permissions.accessibility"));
     return missing;
-  }, [permissions]);
+  }, [permissions, t]);
 
   const handleCommand = useCallback(
     async (command: RecorderCommand, nextStatus?: RecorderStatus) => {
@@ -329,8 +331,12 @@ export default function RecorderPanel() {
         if (command === "stop") {
           const ai = localStorage.getItem("appleIntelligenceDescriptions") === "true";
           if (ai) {
+            const aiLanguage = appLanguage === "system" ? locale : appLanguage;
             // Fire-and-forget; progress is reflected via step-updated events.
-            invoke("generate_step_descriptions", { mode: "missing_only" }).catch(() => {});
+            invoke("generate_step_descriptions", {
+              mode: "missing_only",
+              appLanguage: aiLanguage,
+            }).catch(() => {});
           }
         }
         if (nextStatus) {
@@ -339,13 +345,13 @@ export default function RecorderPanel() {
       } catch (err) {
         const message = String(err);
         if (message.includes("missing screen recording")) {
-          setError("Grant Screen Recording and Accessibility permissions to record.");
+          setError(t("recorder.error.permissions_required"));
         } else {
           setError(message);
         }
       }
     },
-    [],
+    [appLanguage, locale, t],
   );
 
   const handleRequestScreenRecording = useCallback(async () => {
@@ -379,7 +385,13 @@ export default function RecorderPanel() {
         filters: [{ name, extensions: [ext] }],
       });
       if (!path) return;
-      await invoke("export_guide", { title, format, outputPath: path });
+      const exportLanguage = appLanguage === "system" ? locale : appLanguage;
+      await invoke("export_guide", {
+        title,
+        format,
+        outputPath: path,
+        appLanguage: exportLanguage,
+      });
       setShowExportSheet(false);
       getCurrentWindow().hide();
     } catch (err) {
@@ -387,16 +399,16 @@ export default function RecorderPanel() {
     } finally {
       setExporting(false);
     }
-  }, []);
+  }, [appLanguage, locale]);
 
   const handleDiscard = useCallback(async () => {
     const confirmed = await ask(
-      `Are you sure you want to discard ${steps.length} captured step${steps.length === 1 ? "" : "s"}? This cannot be undone.`,
+      t("recorder.discard.dialog_body", { count: steps.length }),
       {
-        title: "Discard Recording",
+        title: t("recorder.discard.dialog_title"),
         kind: "warning",
-        okLabel: "Discard",
-        cancelLabel: "Cancel",
+        okLabel: t("recorder.discard.dialog_ok"),
+        cancelLabel: t("recorder.discard.dialog_cancel"),
       }
     );
 
@@ -410,23 +422,23 @@ export default function RecorderPanel() {
       setStatus("idle");
       setError(null);
     }
-  }, [steps.length]);
+  }, [steps.length, t]);
 
   const handleNewRecording = useCallback(async () => {
     if (steps.length > 0) {
       const confirmed = await ask(
-        `Starting a new recording will discard ${steps.length} captured step${steps.length === 1 ? "" : "s"}. Continue?`,
+        t("recorder.new.dialog_body", { count: steps.length }),
         {
-          title: "New Recording",
+          title: t("recorder.new.dialog_title"),
           kind: "warning",
-          okLabel: "Discard & Record",
-          cancelLabel: "Cancel",
+          okLabel: t("recorder.new.dialog_ok"),
+          cancelLabel: t("common.cancel"),
         }
       );
       if (!confirmed) return;
     }
     handleCommand("start", "recording");
-  }, [steps.length, handleCommand]);
+  }, [steps.length, handleCommand, t]);
 
   const handleDeleteStep = useCallback((id: string) => {
     invoke("delete_step", { stepId: id }).catch(() => {});
@@ -469,16 +481,16 @@ export default function RecorderPanel() {
     <main className={`panel${isIdle ? "" : " panel-full"}${showNotch ? "" : " no-notch"}`}>
       {/* Header */}
       <header className="panel-header">
-        <h1 className="panel-title">StepCast</h1>
+        <h1 className="panel-title">{t("app.name")}</h1>
         <div className="panel-header-right">
           <div className="status-chip" data-tone={STATUS_TONES[status]}>
             {status === "recording" && <span className="rec-dot" />}
-            {STATUS_LABELS[status]}
+            {t(STATUS_LABEL_KEYS[status])}
           </div>
           <button
             className="button-icon"
             onClick={() => setShowSettings(true)}
-            title="Settings"
+            title={t("recorder.header.settings_title")}
           >
             <SettingsIcon />
           </button>
@@ -488,8 +500,8 @@ export default function RecorderPanel() {
       {/* Fallback hint when tray icon is hidden */}
       {!showNotch && (
         <div className="fallback-hint">
-          <span>Tray icon hidden by another app — use <kbd>Cmd+Shift+S</kbd> to toggle</span>
-          <button onClick={() => setShowNotch(true)} title="Dismiss">&times;</button>
+          <span dangerouslySetInnerHTML={{ __html: t("recorder.fallback_hint") }} />
+          <button onClick={() => setShowNotch(true)} title={t("recorder.fallback_dismiss_title")}>&times;</button>
         </div>
       )}
 
@@ -497,13 +509,13 @@ export default function RecorderPanel() {
       {updateAvailable && (
         <div className="update-banner">
           <div className="update-banner-header">
-            <span>v{updateAvailable} available</span>
+            <span>{t("recorder.update.available", { version: updateAvailable })}</span>
             <button
               className="button ghost"
               onClick={handleUpdate}
               disabled={updating}
             >
-              {updating ? "Updating..." : "Install"}
+              {updating ? t("recorder.update.updating") : t("recorder.update.install")}
             </button>
           </div>
           {updateNotes && <ReleaseNotes body={updateNotes} />}
@@ -514,7 +526,7 @@ export default function RecorderPanel() {
       {whatsNew && !showWelcome && (
         <div className="update-banner">
           <div className="update-banner-header">
-            <span>Updated to v{whatsNew}</span>
+            <span>{t("recorder.update.updated_to", { version: whatsNew })}</span>
             <button
               className="button ghost"
               onClick={() => {
@@ -522,7 +534,7 @@ export default function RecorderPanel() {
                 setWhatsNew(null);
               }}
             >
-              Dismiss
+              {t("common.dismiss")}
             </button>
           </div>
         </div>
@@ -533,25 +545,25 @@ export default function RecorderPanel() {
         <section className="panel-card">
           <div className="permissions">
             <div className="permission-banner warn">
-              Missing: {missingPermissions.join(", ")}
+              {t("recorder.permissions.missing", { list: missingPermissions.join(", ") })}
             </div>
             <div className="permission-row">
-              <span>Screen Recording</span>
+              <span>{t("recorder.permissions.screen_recording")}</span>
               {permissions?.screen_recording ? (
-                <span className="pill ok">OK</span>
+                <span className="pill ok">{t("recorder.permissions.ok")}</span>
               ) : (
                 <button className="pill-button warn" onClick={handleRequestScreenRecording}>
-                  Open Settings
+                  {t("recorder.permissions.open_settings")}
                 </button>
               )}
             </div>
             <div className="permission-row">
-              <span>Accessibility</span>
+              <span>{t("recorder.permissions.accessibility")}</span>
               {permissions?.accessibility ? (
-                <span className="pill ok">OK</span>
+                <span className="pill ok">{t("recorder.permissions.ok")}</span>
               ) : (
                 <button className="pill-button warn" onClick={handleRequestAccessibility}>
-                  Open Settings
+                  {t("recorder.permissions.open_settings")}
                 </button>
               )}
             </div>
@@ -573,9 +585,9 @@ export default function RecorderPanel() {
             disabled={!permissionsReady}
           >
             <RecordIcon />
-            Start Recording
+            {t("recorder.idle.start_recording")}
           </button>
-          <p className="idle-hint">Click anywhere on your screen to capture steps</p>
+          <p className="idle-hint">{t("recorder.idle.hint")}</p>
         </div>
       )}
 
@@ -590,14 +602,14 @@ export default function RecorderPanel() {
                   onClick={() => handleCommand("pause", "paused")}
                 >
                   <PauseIcon />
-                  Pause
+                  {t("recorder.controls.pause")}
                 </button>
                 <button
                   className="button danger"
                   onClick={() => handleCommand("stop", "stopped")}
                 >
                   <StopIcon />
-                  Stop
+                  {t("recorder.controls.stop")}
                 </button>
               </>
             )}
@@ -609,14 +621,14 @@ export default function RecorderPanel() {
                   onClick={() => handleCommand("resume", "recording")}
                 >
                   <PlayIcon />
-                  Resume
+                  {t("recorder.controls.resume")}
                 </button>
                 <button
                   className="button danger"
                   onClick={() => handleCommand("stop", "stopped")}
                 >
                   <StopIcon />
-                  Stop
+                  {t("recorder.controls.stop")}
                 </button>
               </>
             )}
@@ -624,14 +636,14 @@ export default function RecorderPanel() {
 
           <div className="steps">
             <div className="steps-header">
-              <h2>Steps</h2>
+              <h2>{t("recorder.steps.title")}</h2>
               <div className="steps-header-right">
-                <span className="muted">{steps.length} captured</span>
+                <span className="muted">{t("recorder.steps.captured_count", { count: steps.length })}</span>
                 {canDiscard && (
                   <button
                     className="button-icon danger"
                     onClick={handleDiscard}
-                    title="Discard recording"
+                    title={t("recorder.discard_title")}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
@@ -642,7 +654,7 @@ export default function RecorderPanel() {
             </div>
             {steps.length === 0 ? (
               <div className="steps-empty">
-                Click anywhere to capture steps.
+                {t("recorder.steps.empty")}
               </div>
             ) : (
               <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -665,8 +677,8 @@ export default function RecorderPanel() {
           <section className="panel-card" style={{ flex: 1, minHeight: 0 }}>
             <div className="steps">
               <div className="steps-header">
-                <h2>Steps</h2>
-                <span className="muted">{steps.length} captured</span>
+                <h2>{t("recorder.steps.title")}</h2>
+                <span className="muted">{t("recorder.steps.captured_count", { count: steps.length })}</span>
               </div>
               <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
@@ -687,7 +699,7 @@ export default function RecorderPanel() {
                 onClick={() => setShowNewMenu((v) => !v)}
               >
                 <RecordIcon />
-                New
+                <span className="action-label">{t("recorder.new.button")}</span>
               </button>
               {showNewMenu && (
                 <>
@@ -698,14 +710,14 @@ export default function RecorderPanel() {
                       disabled={!permissionsReady}
                     >
                       <RecordIcon />
-                      New Recording
+                      {t("recorder.new.recording")}
                     </button>
                     <button
                       className="danger"
                       onClick={() => { setShowNewMenu(false); handleDiscard(); }}
                     >
                       <TrashIcon />
-                      Discard All
+                      {t("recorder.new.discard_all")}
                     </button>
                   </div>
                 </>
@@ -716,14 +728,14 @@ export default function RecorderPanel() {
               onClick={() => invoke("open_editor_window")}
             >
               <EditIcon />
-              Edit
+              <span className="action-label">{t("recorder.action.edit")}</span>
             </button>
             <button
               className="button primary"
               onClick={() => setShowExportSheet(true)}
             >
               <ExportIcon />
-              Export
+              <span className="action-label">{t("recorder.action.export")}</span>
             </button>
           </div>
         </>

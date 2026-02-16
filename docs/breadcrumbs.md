@@ -310,3 +310,66 @@
 2026-02-15
 - Confirmed publish run `22037041331` succeeded and produced both arch assets for draft `v0.3.0`, but release metadata remained tied to prior dispatch context (`targetCommitish` mismatch).
 - Chose clean provenance path: prepare fresh version/tag `0.3.1` from current `main`.
+
+2026-02-16
+- Loaded superpowers skill docs: using-superpowers, brainstorming, writing-plans, executing-plans, test-driven-development, verification-before-completion, requesting-code-review.
+- Chosen execution default: implement multilingual MVP now (frontend + settings + contributor file schema), defer backend export/tray and Swift AI localization to planned next phases.
+- Started skill-driven flow with explicit plan tracking and docs-first artifacts.
+- Implemented frontend i18n MVP: added `src/i18n` runtime, locale catalogs (`en`,`de`), and app/editor providers in `src/main.tsx` + `src/editor.tsx`.
+- Added Settings language selector with Tauri sync event (`language-changed`) and editor listener.
+- Migrated key UI components to i18n keys: Settings, RecorderPanel, ExportSheet, WelcomeBanner, EditorWindow, EditorStepCard, StepItem, CropEditorModal, StepScreenshot, ImageLightbox, UndoToast.
+- Added contributor translation validator `scripts/check-i18n.js`, npm script `i18n:check`, and contributing docs update.
+- Verified: `npm run i18n:check`, `npm test` (254/254), `npm run build`.
+- Ran requesting-code-review flow with explorer subagent; finding: test isolation risk in `SettingsSheet.test.tsx` due persisted `appLanguage`.
+- Applied fix: clear `localStorage` and reset `data-theme` in test `beforeEach`; re-verified full frontend gate.
+2026-02-16
+- Began Phase 2 backend i18n implementation for multilingual support (export + tray) based on prior Phase 1 frontend rollout.
+- Added new Rust locale module `src-tauri/src/i18n.rs` with app-language parsing, locale resolution, translated export/tray strings, and unit tests.
+- Extended `export_guide` command in `src-tauri/src/lib.rs` to accept optional `app_language` and pass resolved locale into export pipeline.
+- Localized export pipeline:
+  - `src-tauri/src/export/mod.rs` now routes locale through all formats.
+  - `src-tauri/src/export/helpers.rs` adds localized action/effective descriptions and auth-placeholder localization guard.
+  - `src-tauri/src/export/html.rs` and `src-tauri/src/export/markdown.rs` render localized step count/headings/alt text.
+  - `src-tauri/src/export/pdf.rs` now renders PDF HTML with locale-aware strings.
+- Localized tray labels/tooltips in `src-tauri/src/tray.rs` using system locale helpers.
+- Updated frontend export invoke in `src/components/RecorderPanel.tsx` to include language and pass resolved locale (`en|de`) when setting is `system`.
+- Updated export payload expectation in `src/components/RecorderPanel.test.tsx`.
+- Ran independent review subagent; key finding was macOS `system` locale fallback risk.
+- Applied review-driven fix:
+  - Frontend now sends resolved locale for export instead of raw `system`.
+  - Backend locale detection hardened to read macOS `AppleLocale` + cache result.
+- Verification completed:
+  - `cd src-tauri && cargo test --quiet`
+  - `npm run i18n:check`
+  - `npm test`
+  - `npm run build`
+2026-02-16
+- Started Phase 3 Apple Intelligence i18n work with spec `docs/specs/2026-02-16-apple-intelligence-i18n-phase3.md`.
+- Extended Rust AI bridge:
+  - `src-tauri/src/lib.rs`: `generate_step_descriptions` now accepts optional `app_language` and resolves locale.
+  - `src-tauri/src/apple_intelligence/mod.rs`: `GenerateRequest` now includes `app_language`; generation forwards locale (`en|de`) to Swift helper.
+- Extended frontend AI invoke payloads:
+  - `src/components/RecorderPanel.tsx`: stop-triggered `generate_step_descriptions` now sends resolved language.
+  - `src/components/EditorWindow.tsx`: single-step, bulk, and enhance-all generation now send resolved language.
+- Localized Swift helper outputs:
+  - `src-tauri/swift/stepcast_ai_helper.swift`: locale plumbing (`appLanguage`), localized instructions/fallback errors, optional `availability --lang` support.
+  - `src-tauri/swift/stepcast_ai_helper_descriptions.swift`: localized baseline sentence templates, prompt text, verb detection, and quality-gate locale-aware checks.
+- Review pass (requesting-code-review style) completed; implemented follow-up fixes:
+  - localized availability details path (`--lang`) for helper availability command,
+  - hardened `language-changed` listener cleanup in `EditorWindow`.
+- Added regression coverage in `src/components/EditorWindow.test.tsx` verifying `language-changed -> appLanguage: "de"` in AI generation invoke payload.
+- Verification completed:
+  - `swiftc -typecheck src-tauri/swift/stepcast_ai_helper.swift src-tauri/swift/stepcast_ai_helper_descriptions.swift src-tauri/swift/stepcast_ai_helper_vision.swift`
+  - `cd src-tauri && cargo test --quiet`
+  - `npm test` (255 tests)
+  - `npm run i18n:check`
+  - `npm run build`
+2026-02-16
+- Fixed stopped-state action bar overflow in localized UI: `src/App.css` now uses a strict 3-column grid (`minmax(0,1fr)`) and `src/components/RecorderPanel.tsx` wraps action button labels in `.action-label` for safe truncation.
+- Verification: `npm test` (255/255) and `npm run build` pass.
+2026-02-16
+- Implemented dynamic-language UX scaling: `src/components/SettingsSheet.tsx` now renders a language dropdown backed by i18n `availableLocales` + `getLanguageLabel` instead of hardcoded `en/de` pills.
+- Hardened language event sync for future locales in `src/components/EditorWindow.tsx` via `isSupportedAppLanguage`.
+- Added select styling in `src/App.css` and adjusted settings tests to combobox interaction in `src/components/SettingsSheet.test.tsx`.
+- Updated contributor docs in `CONTRIBUTING.md` to document auto-discovery of new locale JSON files.
+- Verification: `npm test` (255/255), `npm run i18n:check`, `npm run build`.

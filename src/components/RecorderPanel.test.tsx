@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { save, ask } from "@tauri-apps/plugin-dialog";
@@ -8,6 +9,19 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import RecorderPanel from "./RecorderPanel";
 import type { Step } from "../types/step";
+
+let dndOnDragEnd: ((event: { active: { id: string }; over: { id: string } | null }) => void) | null = null;
+
+vi.mock("@dnd-kit/core", async () => {
+  const actual = await vi.importActual<typeof import("@dnd-kit/core")>("@dnd-kit/core");
+  return {
+    ...actual,
+    DndContext: (props: { children: ReactNode; onDragEnd?: typeof dndOnDragEnd }) => {
+      dndOnDragEnd = props.onDragEnd ?? null;
+      return <div data-testid="mock-dnd-context">{props.children}</div>;
+    },
+  };
+});
 
 const mockInvoke = vi.mocked(invoke);
 const mockListen = vi.mocked(listen);
@@ -56,6 +70,7 @@ let stepsReorderedCallback: ((event: { payload: Step[] }) => void) | null = null
 let panelPositionedCallback: ((event: { payload: boolean }) => void) | null = null;
 
 beforeEach(() => {
+  dndOnDragEnd = null;
   stepCapturedCallback = null;
   stepUpdatedCallback = null;
   stepDeletedCallback = null;
@@ -254,6 +269,18 @@ describe("RecorderPanel", () => {
       expect(screen.getByText("Export")).toBeInTheDocument();
     });
 
+    it("paused → stop shows stopped state", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1" }));
+      await user.click(screen.getByText("Pause"));
+      await user.click(screen.getByText("Stop"));
+
+      expect(mockInvoke).toHaveBeenCalledWith("stop_recording");
+      expect(screen.getByText("Stopped")).toBeInTheDocument();
+    });
+
     it("shows error when recording command fails with missing permissions", async () => {
       const user = userEvent.setup();
       mockInvoke.mockImplementation(async (cmd: string) => {
@@ -349,6 +376,37 @@ describe("RecorderPanel", () => {
     });
   });
 
+  describe("drag reorder", () => {
+    it("reorders steps and calls backend on drag end", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+      await user.click(await screen.findByText("Start Recording"));
+
+      emitStep(makeStep({ id: "s1", app: "Finder" }));
+      emitStep(makeStep({ id: "s2", app: "Safari" }));
+
+      act(() => {
+        dndOnDragEnd?.({ active: { id: "s1" }, over: { id: "s2" } });
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("reorder_steps", { stepIds: ["s2", "s1"] });
+    });
+
+    it("ignores drag end when there is no drop target", async () => {
+      const user = userEvent.setup();
+      render(<RecorderPanel />);
+      await user.click(await screen.findByText("Start Recording"));
+      emitStep(makeStep({ id: "s1", app: "Finder" }));
+      emitStep(makeStep({ id: "s2", app: "Safari" }));
+
+      act(() => {
+        dndOnDragEnd?.({ active: { id: "s1" }, over: null });
+      });
+
+      expect(mockInvoke).not.toHaveBeenCalledWith("reorder_steps", expect.anything());
+    });
+  });
+
   describe("export flow", () => {
     it("opens export sheet and exports successfully", async () => {
       const user = userEvent.setup();
@@ -373,6 +431,7 @@ describe("RecorderPanel", () => {
         title: "New StepCast Guide",
         format: "pdf",
         outputPath: "/tmp/guide.pdf",
+        appLanguage: "en",
       });
     });
 
@@ -696,6 +755,25 @@ describe("RecorderPanel", () => {
       });
 
       expect(screen.getByText("Welcome to StepCast")).toBeInTheDocument();
+    });
+
+    it("hides welcome banner once recording starts", async () => {
+      const user = userEvent.setup();
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === "check_permissions") {
+          return { screen_recording: true, accessibility: true };
+        }
+        if (cmd === "get_startup_state") {
+          return { has_launched_before: false, last_seen_version: null };
+        }
+        return undefined;
+      });
+
+      render(<RecorderPanel />);
+      expect(await screen.findByText("Welcome to StepCast")).toBeInTheDocument();
+
+      await user.click(screen.getByText("Start Recording"));
+      expect(screen.queryByText("Welcome to StepCast")).not.toBeInTheDocument();
     });
   });
 

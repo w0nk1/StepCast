@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "session:ai-report": "node scripts/session-ai-report.js",
+    "i18n:check": "node scripts/check-i18n.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

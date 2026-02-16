@@ -10,6 +10,7 @@ import {
   markerPositionForStep,
   normalizeCropRegion,
 } from "../utils/stepCrop";
+import { useI18n } from "../i18n";
 
 type StepScreenshotProps = {
   step: Step;
@@ -28,6 +29,7 @@ export default memo(function StepScreenshot({
   onImageNaturalSize,
   imageNaturalSize,
 }: StepScreenshotProps) {
+  const { t } = useI18n();
   const [imageRetry, setImageRetry] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
@@ -88,7 +90,7 @@ export default memo(function StepScreenshot({
           <button
             className="editor-image-expand"
             onClick={() => setLightboxOpen(true)}
-            title="View full size"
+            title={t("step.crop.view_full_size")}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="15 3 21 3 21 9" />
@@ -111,7 +113,7 @@ export default memo(function StepScreenshot({
           >
             <img
               src={screenshotSrc}
-              alt={`Step ${index + 1}`}
+              alt={t("step.image_alt", { num: index + 1 })}
               loading="lazy"
               decoding="async"
               style={cropStyles.imageStyle}
@@ -141,7 +143,7 @@ export default memo(function StepScreenshot({
       {lightboxOpen && screenshotBaseSrc && (
         <ImageLightbox
           src={screenshotBaseSrc}
-          alt={`Step ${index + 1} full size`}
+          alt={t("step.full_image_alt", { num: index + 1 })}
           onClose={() => setLightboxOpen(false)}
         />
       )}

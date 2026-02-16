@@ -7,6 +7,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import SettingsSheet, { initTheme } from "./SettingsSheet";
+import { I18nProvider } from "../i18n";
 
 const mockInvoke = vi.mocked(invoke);
 const mockEmit = vi.mocked(emit);
@@ -29,7 +30,17 @@ function fakeUpdate(overrides: Partial<Update> = {}): Update {
   } as unknown as Update;
 }
 
+function renderSettings(onBack = vi.fn()) {
+  return render(
+    <I18nProvider>
+      <SettingsSheet onBack={onBack} />
+    </I18nProvider>,
+  );
+}
+
 beforeEach(() => {
+  localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
   mockInvoke.mockReset();
   mockEmit.mockReset();
   mockOpenUrl.mockReset();
@@ -43,24 +54,32 @@ beforeEach(() => {
 
 describe("SettingsSheet", () => {
   it("renders settings header with back button", () => {
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
   it("defaults theme to system", () => {
-    render(<SettingsSheet onBack={vi.fn()} />);
-    expect(screen.getByText("System").className).toContain("active");
+    renderSettings();
+    expect(screen.getByRole("button", { name: "System" }).className).toContain("active");
   });
 
   it("loads saved theme from localStorage", () => {
     localStorage.setItem("theme", "dark");
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     expect(screen.getByText("Dark").className).toContain("active");
+  });
+
+  it("changes app language and emits sync event", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), "de");
+    expect(localStorage.getItem("appLanguage")).toBe("de");
+    expect(mockEmit).toHaveBeenCalledWith("language-changed", { language: "de" });
   });
 
   it("sets data-theme and localStorage when selecting a theme", async () => {
     const user = userEvent.setup();
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Dark"));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     expect(localStorage.getItem("theme")).toBe("dark");
@@ -70,21 +89,21 @@ describe("SettingsSheet", () => {
     const user = userEvent.setup();
     document.documentElement.setAttribute("data-theme", "dark");
     localStorage.setItem("theme", "dark");
-    render(<SettingsSheet onBack={vi.fn()} />);
-    await user.click(screen.getByText("System"));
+    renderSettings();
+    await user.click(screen.getByRole("button", { name: "System" }));
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
     expect(localStorage.getItem("theme")).toBe("system");
   });
 
   it("shows version number from Tauri API", async () => {
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     expect(await screen.findByText("Version 0.2.0")).toBeInTheDocument();
   });
 
   it("checks for updates and shows up-to-date", async () => {
     const user = userEvent.setup();
     mockCheck.mockResolvedValue(null);
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Check for Updates"));
     expect(await screen.findByText("You're up to date")).toBeInTheDocument();
   });
@@ -92,7 +111,7 @@ describe("SettingsSheet", () => {
   it("shows available update with install button", async () => {
     const user = userEvent.setup();
     mockCheck.mockResolvedValue(fakeUpdate());
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Check for Updates"));
     expect(await screen.findByText("Install v1.2.0")).toBeInTheDocument();
   });
@@ -103,7 +122,7 @@ describe("SettingsSheet", () => {
     mockCheck.mockResolvedValue(
       fakeUpdate({ downloadAndInstall: mockDownloadAndInstall }),
     );
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
 
     // First check for updates
     await user.click(screen.getByText("Check for Updates"));
@@ -117,7 +136,7 @@ describe("SettingsSheet", () => {
   it("shows error when update check fails", async () => {
     const user = userEvent.setup();
     mockCheck.mockRejectedValue(new Error("Network error"));
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Check for Updates"));
     expect(
       await screen.findByText("Could not check for updates"),
@@ -126,26 +145,26 @@ describe("SettingsSheet", () => {
 
   it("calls onBack when Escape is pressed", () => {
     const onBack = vi.fn();
-    render(<SettingsSheet onBack={onBack} />);
+    renderSettings(onBack);
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onBack).toHaveBeenCalled();
   });
 
   it("renders GitHub and bug report links", () => {
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("Report a Bug")).toBeInTheDocument();
   });
 
   it("renders Apple-style switch control for Apple Intelligence toggle", () => {
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     const toggle = screen.getByLabelText("Apple Intelligence step descriptions");
     expect(toggle).toHaveAttribute("role", "switch");
   });
 
   it("toggles Apple Intelligence via row click and emits sync event", async () => {
     const user = userEvent.setup();
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     const row = screen.getByLabelText("Toggle Apple Intelligence step descriptions");
     await user.click(row);
     expect(localStorage.getItem("appleIntelligenceDescriptions")).toBe("true");
@@ -153,7 +172,7 @@ describe("SettingsSheet", () => {
   });
 
   it("toggles Apple Intelligence via keyboard (Enter and Space)", () => {
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     const row = screen.getByLabelText("Toggle Apple Intelligence step descriptions");
     fireEvent.keyDown(row, { key: "Enter" });
     expect(localStorage.getItem("appleIntelligenceDescriptions")).toBe("true");
@@ -163,13 +182,13 @@ describe("SettingsSheet", () => {
 
   it("shows eligibility fallback when response shape is invalid", async () => {
     mockInvoke.mockResolvedValue({ foo: "bar" });
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     expect(await screen.findByText(/Could not check system eligibility\./)).toBeInTheDocument();
   });
 
   it("shows eligibility fallback when eligibility call fails", async () => {
     mockInvoke.mockRejectedValue(new Error("boom"));
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     expect(await screen.findByText(/Could not check system eligibility\./)).toBeInTheDocument();
   });
 
@@ -178,7 +197,7 @@ describe("SettingsSheet", () => {
     mockOpenUrl
       .mockRejectedValueOnce(new Error("primary fail"))
       .mockResolvedValueOnce();
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Open Apple Intelligence & Siri Settings"));
     expect(mockOpenUrl).toHaveBeenNthCalledWith(
       1,
@@ -193,14 +212,14 @@ describe("SettingsSheet", () => {
   it("swallows errors when both settings URLs fail", async () => {
     const user = userEvent.setup();
     mockOpenUrl.mockRejectedValue(new Error("all fail"));
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Open Apple Intelligence & Siri Settings"));
     expect(mockOpenUrl).toHaveBeenCalledTimes(2);
   });
 
   it("opens About links", async () => {
     const user = userEvent.setup();
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("GitHub"));
     await user.click(screen.getByText("Report a Bug"));
     expect(mockOpenUrl).toHaveBeenCalledWith("https://github.com/w0nk1/StepCast");
@@ -212,7 +231,7 @@ describe("SettingsSheet", () => {
     mockCheck
       .mockResolvedValueOnce(fakeUpdate())
       .mockRejectedValueOnce(new Error("install check fail"));
-    render(<SettingsSheet onBack={vi.fn()} />);
+    renderSettings();
     await user.click(screen.getByText("Check for Updates"));
     await user.click(await screen.findByText("Install v1.2.0"));
     expect(await screen.findByText("Could not check for updates")).toBeInTheDocument();

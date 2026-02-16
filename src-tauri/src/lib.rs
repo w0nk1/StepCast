@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 mod apple_intelligence;
 mod export;
+mod i18n;
 mod panel;
 mod recorder;
 mod startup_state;
@@ -169,20 +170,21 @@ fn get_apple_intelligence_eligibility() -> AppleIntelligenceEligibility {
             };
         }
 
-        let availability = match crate::apple_intelligence::availability() {
-            Ok(a) => a,
-            Err(err) => {
-                return AppleIntelligenceEligibility {
-                    eligible: false,
-                    reason: "Could not check Apple Intelligence availability.".to_string(),
-                    details: Some(format!(
-                        "{}; {}",
-                        platform_details.unwrap_or_else(|| format!("macos (unknown) ({arch})")),
-                        err
-                    )),
-                };
-            }
-        };
+        let availability =
+            match crate::apple_intelligence::availability(Some(crate::i18n::system_locale())) {
+                Ok(a) => a,
+                Err(err) => {
+                    return AppleIntelligenceEligibility {
+                        eligible: false,
+                        reason: "Could not check Apple Intelligence availability.".to_string(),
+                        details: Some(format!(
+                            "{}; {}",
+                            platform_details.unwrap_or_else(|| format!("macos (unknown) ({arch})")),
+                            err
+                        )),
+                    };
+                }
+            };
 
         if availability.available {
             return AppleIntelligenceEligibility {
@@ -1035,6 +1037,7 @@ fn generate_step_descriptions(
     state: tauri::State<'_, RecorderAppState>,
     mode: Option<String>,
     step_ids: Option<Vec<String>>,
+    app_language: Option<String>,
 ) -> Result<(), String> {
     // Serialize description generation to avoid racing step updates.
     if state.ai_descriptions_running.swap(true, Ordering::SeqCst) {
@@ -1064,6 +1067,7 @@ fn generate_step_descriptions(
 
     // Slightly longer than a one-liner, still "no novels" — enables useful context like "from the Dock".
     let max_chars = 110usize;
+    let locale = i18n::resolve_locale(i18n::parse_app_language(app_language.as_deref()));
     let mut ids_to_generate: Vec<String> = Vec::new();
     let (steps_to_generate, session_dir): (Vec<Step>, std::path::PathBuf) = {
         let mut session_lock = state.session.lock().map_err(|_| "session lock poisoned")?;
@@ -1153,7 +1157,7 @@ fn generate_step_descriptions(
         let generate_steps = steps_to_generate;
 
         let resp = tauri::async_runtime::spawn_blocking(move || {
-            crate::apple_intelligence::generate_descriptions(generate_steps, max_chars)
+            crate::apple_intelligence::generate_descriptions(generate_steps, max_chars, locale)
         })
         .await;
 
@@ -1380,8 +1384,10 @@ async fn export_guide(
     title: String,
     format: String,
     output_path: String,
+    app_language: Option<String>,
 ) -> Result<(), String> {
     let fmt = export::ExportFormat::from_str(&format)?;
+    let locale = i18n::resolve_locale(i18n::parse_app_language(app_language.as_deref()));
     let steps = {
         let session_lock = state.session.lock().map_err(|_| "session lock poisoned")?;
         session_lock
@@ -1389,7 +1395,7 @@ async fn export_guide(
             .map(|s| s.get_steps().to_vec())
             .unwrap_or_default()
     };
-    export::export(&title, &steps, fmt, &output_path, &app)
+    export::export(&title, &steps, fmt, &output_path, &app, locale)
 }
 
 #[tauri::command]

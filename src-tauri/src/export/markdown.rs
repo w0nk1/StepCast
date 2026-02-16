@@ -1,4 +1,7 @@
-use super::helpers::{effective_description, load_screenshot_optimized_image, ImageTarget};
+use super::helpers::{
+    effective_description_localized, load_screenshot_optimized_image, ImageTarget,
+};
+use crate::i18n::Locale;
 use crate::recorder::types::Step;
 use std::fs;
 use std::io::{Cursor, Write as _};
@@ -18,32 +21,44 @@ pub fn images_dir_name(output_path: &Path) -> String {
 
 /// Generate markdown content. `images_dir` is the relative folder name for images.
 /// `image_exts` maps step index (0-based) to file extension ("webp" or "png").
+#[allow(dead_code)]
 pub fn generate_content(
     title: &str,
     steps: &[Step],
     images_dir: &str,
     image_exts: &[&str],
 ) -> String {
+    generate_content_localized(title, steps, images_dir, image_exts, Locale::En)
+}
+
+pub fn generate_content_localized(
+    title: &str,
+    steps: &[Step],
+    images_dir: &str,
+    image_exts: &[&str],
+    locale: Locale,
+) -> String {
     let mut md = format!(
-        "# {title} — {count} step{plural}\n\n",
-        count = steps.len(),
-        plural = if steps.len() == 1 { "" } else { "s" },
+        "# {title} — {step_count}\n\n",
+        step_count = crate::i18n::export_step_count(locale, steps.len()),
     );
 
     for (i, step) in steps.iter().enumerate() {
         let num = i + 1;
-        let desc = effective_description(step);
+        let desc = effective_description_localized(step, locale);
 
-        md.push_str(&format!("## Step {num}\n\n"));
+        md.push_str(&format!(
+            "## {}\n\n",
+            crate::i18n::export_step_heading(locale, num)
+        ));
 
         md.push_str(&format!("**{desc}**\n\n"));
 
         // Image reference (relative path into images dir)
         if step.screenshot_path.is_some() {
             let ext = image_exts.get(i).unwrap_or(&"png");
-            md.push_str(&format!(
-                "![Step {num}](<./{images_dir}/step-{num}.{ext}>)\n\n"
-            ));
+            let alt = crate::i18n::export_step_image_alt(locale, num);
+            md.push_str(&format!("![{alt}](<./{images_dir}/step-{num}.{ext}>)\n\n"));
         }
 
         if let Some(note) = &step.note {
@@ -57,7 +72,17 @@ pub fn generate_content(
 /// Write a zip archive containing the markdown file and screenshot images.
 /// `output_path` should end in `.zip`. The inner `.md` file derives its name
 /// from the zip stem: "My Guide.zip" → "My Guide.md".
+#[allow(dead_code)]
 pub fn write(title: &str, steps: &[Step], output_path: &str) -> Result<(), String> {
+    write_localized(title, steps, output_path, Locale::En)
+}
+
+pub fn write_localized(
+    title: &str,
+    steps: &[Step],
+    output_path: &str,
+    locale: Locale,
+) -> Result<(), String> {
     let path = Path::new(output_path);
     let stem = path
         .file_stem()
@@ -85,7 +110,7 @@ pub fn write(title: &str, steps: &[Step], output_path: &str) -> Result<(), Strin
         .iter()
         .map(|c| c.as_ref().map(|(_, ext)| *ext).unwrap_or("png"))
         .collect();
-    let content = generate_content(title, steps, &images_dir, &image_exts);
+    let content = generate_content_localized(title, steps, &images_dir, &image_exts, locale);
 
     let buf: Vec<u8> = {
         let cursor = Cursor::new(Vec::new());
@@ -168,6 +193,20 @@ mod tests {
             &["png", "png"],
         );
         assert!(md.contains("2 steps"));
+    }
+
+    #[test]
+    fn generate_localized_german_text() {
+        let md = generate_content_localized(
+            "Anleitung",
+            &[sample_step()],
+            "g-images",
+            &["png"],
+            crate::i18n::Locale::De,
+        );
+        assert!(md.starts_with("# Anleitung — 1 Schritt"));
+        assert!(md.contains("## Schritt 1"));
+        assert!(md.contains("**Geklickt in Finder"));
     }
 
     #[test]

@@ -5,6 +5,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import CropEditorModal from "./CropEditorModal";
 import StepScreenshot from "./StepScreenshot";
 import type { BoundsPercent, Step } from "../types/step";
+import { useI18n } from "../i18n";
 
 type EditorStepCardProps = {
   step: Step;
@@ -39,6 +40,7 @@ export default memo(function EditorStepCard({
   isSelectionActive = false,
   onToggleSelect,
 }: EditorStepCardProps) {
+  const { t } = useI18n();
   const {
     attributes,
     listeners,
@@ -87,17 +89,17 @@ export default memo(function EditorStepCard({
 
   const actionDesc =
     step.action === "DoubleClick"
-      ? "Double-clicked in"
+      ? t("step.action.double_clicked_in")
       : step.action === "RightClick"
-        ? "Right-clicked in"
+        ? t("step.action.right_clicked_in")
         : step.action === "Shortcut"
-          ? "Used keyboard shortcut in"
-          : "Clicked in";
+          ? t("step.action.shortcut_in")
+          : t("step.action.clicked_in");
 
   const authDescription =
     step.description && step.description.trim().length > 0
       ? step.description.trim()
-      : "Authenticate with Touch ID or enter your password to continue.";
+      : t("step.auth.default");
 
   const effectiveDescription = isAuthPlaceholder
     ? authDescription
@@ -158,7 +160,7 @@ export default memo(function EditorStepCard({
 
   return (
     <div className="editor-timeline-item" ref={setNodeRef} style={sortableStyle} {...attributes}>
-      <button className="editor-drag-handle" {...listeners} title="Drag to reorder">
+      <button className="editor-drag-handle" {...listeners} title={t("step.drag_reorder_title")}>
         <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
           <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
           <circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/>
@@ -174,7 +176,7 @@ export default memo(function EditorStepCard({
           index + 1
         )}
         {(step.action === "DoubleClick" || step.action === "RightClick" || step.action === "Shortcut") && (
-          <span className="editor-badge-action" title={step.action === "DoubleClick" ? "Double click" : step.action === "RightClick" ? "Right click" : "Keyboard shortcut"}>
+          <span className="editor-badge-action" title={step.action === "DoubleClick" ? t("step.badge.double_click") : step.action === "RightClick" ? t("step.badge.right_click") : t("step.badge.shortcut")}>
             {step.action === "DoubleClick" ? (
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                 <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="4" />
@@ -198,7 +200,7 @@ export default memo(function EditorStepCard({
             <button
               className={`editor-step-checkbox${isSelected ? " is-checked" : ""}${isSelectionActive ? " is-visible" : ""}`}
               onClick={(e) => onToggleSelect(step.id, e.shiftKey)}
-              title={isSelected ? "Deselect step" : "Select step"}
+              title={isSelected ? t("step.deselect") : t("step.select")}
             >
               {isSelected && (
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -211,7 +213,7 @@ export default memo(function EditorStepCard({
             <button
               className={`editor-step-collapse${collapsed ? " is-collapsed" : ""}`}
               onClick={() => onToggleCollapse(step.id)}
-              title={collapsed ? "Expand step" : "Collapse step"}
+              title={collapsed ? t("step.expand") : t("step.collapse")}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M6 9l6 6 6-6" />
@@ -226,13 +228,13 @@ export default memo(function EditorStepCard({
               onChange={(e) => setDescDraft(e.target.value)}
               onBlur={handleSaveDesc}
               onKeyDown={handleDescKeyDown}
-              placeholder="Step description..."
+              placeholder={t("step.description.placeholder")}
             />
           ) : (
             <button
               className="editor-step-desc editor-step-desc-btn"
               onClick={handleStartDescEdit}
-              title={isAuthPlaceholder ? undefined : "Edit description"}
+              title={isAuthPlaceholder ? undefined : t("step.description.edit_title")}
               disabled={isAuthPlaceholder || isGenerating}
             >
               {isGenerating ? (
@@ -261,7 +263,7 @@ export default memo(function EditorStepCard({
               <button
                 className={`editor-step-crop${step.crop_region ? " is-cropped" : ""}`}
                 onClick={() => setCropOpen(true)}
-                title={step.crop_region ? "Cropped — click to adjust" : "Adjust visible screenshot area"}
+                title={step.crop_region ? t("step.crop.adjusted_title") : t("step.crop.adjust_title")}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 2v14a2 2 0 0 0 2 2h14" />
@@ -270,21 +272,21 @@ export default memo(function EditorStepCard({
               </button>
             )}
             {isGenerating && (
-              <span className="editor-step-pill generating" title="Generating with Apple Intelligence...">AI…</span>
+              <span className="editor-step-pill generating" title={t("step.ai.generating_title")}>{t("step.ai.generating_pill")}</span>
             )}
             {!isGenerating && isAi && (
-              <span className="editor-step-pill ai" title="Generated by Apple Intelligence">AI</span>
+              <span className="editor-step-pill ai" title={t("step.ai.generated_pill")}>{t("step.ai.generated_pill")}</span>
             )}
             {isFailed && (
               <>
-                <span className="editor-step-pill error" title={step.description_error ?? "Apple Intelligence generation failed"}>AI!</span>
+                <span className="editor-step-pill error" title={step.description_error ?? t("step.ai.failed_default")}>{t("step.ai.failed_pill")}</span>
                 <button
                   className="editor-step-retry"
                   onClick={() => onGenerateDescription(step.id)}
                   disabled={!aiEnabled}
-                  title={aiEnabled ? "Retry AI generation" : "Enable Apple Intelligence in Settings"}
+                  title={aiEnabled ? t("step.ai.retry_enabled_title") : t("step.ai.retry_disabled_title")}
                 >
-                  Retry
+                  {t("step.ai.retry")}
                 </button>
               </>
             )}
@@ -292,14 +294,14 @@ export default memo(function EditorStepCard({
               className="editor-step-ai"
               onClick={() => onGenerateDescription(step.id)}
               disabled={!aiEnabled || isGenerating || isAuthPlaceholder}
-              title={!aiEnabled ? "Enable Apple Intelligence descriptions in StepCast Settings" : isGenerating ? "Generating..." : "Generate with Apple Intelligence"}
+              title={!aiEnabled ? t("step.ai.button_disabled_title") : isGenerating ? t("step.ai.button_generating_title") : t("step.ai.button_default_title")}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                 <path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5L10 2z" />
                 <path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" />
               </svg>
             </button>
-            <button className="editor-step-delete" onClick={() => onDelete(step.id)} title="Remove step">
+            <button className="editor-step-delete" onClick={() => onDelete(step.id)} title={t("step.delete.remove_title")}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
@@ -326,7 +328,7 @@ export default memo(function EditorStepCard({
                   onChange={(e) => setNoteDraft(e.target.value)}
                   onBlur={handleSaveNote}
                   onKeyDown={handleNoteKeyDown}
-                  placeholder="Add a note..."
+                  placeholder={t("step.note.placeholder")}
                   rows={2}
                 />
               ) : (
@@ -334,7 +336,7 @@ export default memo(function EditorStepCard({
                   className={`editor-step-note-btn${step.note ? " has-note" : ""}`}
                   onClick={handleStartNoteEdit}
                 >
-                  {step.note || "Add a note..."}
+                  {step.note || t("step.note.button_default")}
                 </button>
               )}
             </div>

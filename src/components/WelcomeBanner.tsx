@@ -1,11 +1,13 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "../i18n";
 
 interface WelcomeBannerProps {
   onDismiss: () => void;
 }
 
 export default function WelcomeBanner({ onDismiss }: WelcomeBannerProps) {
+  const { t } = useI18n();
   const handleDismiss = useCallback(async () => {
     try {
       await invoke("mark_startup_seen");
@@ -17,19 +19,19 @@ export default function WelcomeBanner({ onDismiss }: WelcomeBannerProps) {
 
   return (
     <section className="welcome-banner">
-      <h2 className="welcome-title">Welcome to StepCast</h2>
+      <h2 className="welcome-title">{t("welcome.title")}</h2>
       <ul className="welcome-tips">
-        <li>Click the menu bar icon to open this panel</li>
+        <li>{t("welcome.tip.menu_bar")}</li>
         <li>
-          Press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> from anywhere
+          <span dangerouslySetInnerHTML={{ __html: t("welcome.tip.shortcut") }} />
         </li>
-        <li>Right-click the icon for more options</li>
+        <li>{t("welcome.tip.right_click")}</li>
         <li>
-          Optional: Apple Intelligence descriptions (on-device, macOS 26+, no step upload)
+          {t("welcome.tip.ai")}
         </li>
       </ul>
       <button className="button ghost welcome-dismiss" onClick={handleDismiss}>
-        Got it
+        {t("welcome.dismiss")}
       </button>
     </section>
   );

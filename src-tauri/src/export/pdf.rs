@@ -1,3 +1,4 @@
+use crate::i18n::Locale;
 use crate::recorder::types::Step;
 use std::sync::mpsc;
 
@@ -52,8 +53,10 @@ pub fn write(
     steps: &[Step],
     output_path: &str,
     app: &tauri::AppHandle,
+    locale: Locale,
 ) -> Result<(), String> {
-    let html = super::html::generate_for(title, steps, super::helpers::ImageTarget::Pdf);
+    let html =
+        super::html::generate_for_locale(title, steps, super::helpers::ImageTarget::Pdf, locale);
     let path = output_path.to_string();
 
     let (tx, rx) = mpsc::channel::<Result<(), String>>();

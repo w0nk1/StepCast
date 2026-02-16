@@ -680,12 +680,31 @@ button:focus, button:focus-visible {
 
 /* Action Bar (Stopped State) */
 .action-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+  align-items: stretch;
+}
+
+.action-bar > * {
+  min-width: 0;
 }
 
 .action-bar .button {
-  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.action-bar .action-dropdown {
+  min-width: 0;
+}
+
+.action-bar .button .action-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Dropdown menu (New button) */
@@ -928,6 +947,22 @@ button:focus, button:focus-visible {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.settings-select {
+  width: 100%;
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.settings-select:focus {
+  border-color: var(--accent);
 }
 
 .ai-settings-label {

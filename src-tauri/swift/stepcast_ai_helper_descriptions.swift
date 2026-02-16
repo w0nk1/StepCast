@@ -15,6 +15,56 @@ func actionVerb(_ action: String) -> String {
   }
 }
 
+func localizedVerb(_ canonicalVerb: String) -> String {
+  switch canonicalVerb {
+  case "Double-click":
+    return l("Double-click", "Doppelklicke")
+  case "Right-click":
+    return l("Right-click", "Klicke mit der rechten Maustaste")
+  case "Press":
+    return l("Press", "Drücke")
+  case "Add a note":
+    return l("Add a note", "Füge eine Notiz hinzu")
+  case "Choose":
+    return l("Choose", "Wähle")
+  case "Select":
+    return l("Select", "Wähle")
+  case "Open":
+    return l("Open", "Öffne")
+  case "Close":
+    return l("Close", "Schließe")
+  case "Enable":
+    return l("Enable", "Aktiviere")
+  case "Disable":
+    return l("Disable", "Deaktiviere")
+  default:
+    return l("Click", "Klicke")
+  }
+}
+
+func localizedKindNoun(_ kind: String) -> String {
+  switch kind {
+  case "item":
+    return l("item", "Element")
+  case "button":
+    return l("button", "Button")
+  case "tab":
+    return l("tab", "Tab")
+  case "text field":
+    return l("text field", "Textfeld")
+  case "list item":
+    return l("item", "Element")
+  case "menu item":
+    return l("menu item", "Menüeintrag")
+  case "menu bar item":
+    return l("menu bar icon", "Menüleisten-Symbol")
+  case "checkbox":
+    return l("checkbox", "Kontrollkästchen")
+  default:
+    return kind
+  }
+}
+
 func normalizeForMatch(_ s: String) -> String {
   s
     .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -625,18 +675,18 @@ func locationHint(_ step: StepInput, kind: String) -> String? {
     let selfIdent = (ax.identifier ?? "").lowercased()
 
     if sub.contains("sourcelist") || sub.contains("sidebar") || ident.contains("sidebar") || selfIdent.contains("sidebar") {
-      return "sidebar"
+      return l("sidebar", "Seitenleiste")
     }
   }
 
   if kind == "menu bar item" {
-    return "menu bar"
+    return l("menu bar", "Menüleiste")
   }
 
   let app = step.app.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
   if app == "finder" {
     // If we can’t prove “sidebar”, still add a non-guessy hint for list interactions.
-    if kind == "list item" { return "file list" }
+    if kind == "list item" { return l("file list", "Dateiliste") }
   }
   return nil
 }
@@ -658,19 +708,19 @@ func appContextSuffix(_ step: StepInput, location: String?) -> String {
   }
   if let location = location, !location.isEmpty {
     if lower == "finder" {
-      if let win = win { return " in the Finder \(location) (\(win))" }
-      return " in the Finder \(location)"
+      if let win = win { return l(" in the Finder \(location) (\(win))", " in der Finder-\(location) (\(win))") }
+      return l(" in the Finder \(location)", " in der Finder-\(location)")
     }
-    if let win = win { return " in \(app) \(location) (\(win))" }
-    return " in \(app) \(location)"
+    if let win = win { return l(" in \(app) \(location) (\(win))", " in \(app) \(location) (\(win))") }
+    return l(" in \(app) \(location)", " in \(app) \(location)")
   }
   if let win = win {
     if lower == "finder" {
-      return " in Finder (\(win))"
+      return l(" in Finder (\(win))", " in Finder (\(win))")
     }
-    return " in \(app) (\(win))"
+    return l(" in \(app) (\(win))", " in \(app) (\(win))")
   }
-  return " in \(app)"
+  return l(" in \(app)", " in \(app)")
 }
 
 func classifyKind(_ step: StepInput) -> String {
@@ -983,81 +1033,112 @@ func baselineDescription(_ step: StepInput, kind: String, label: String, locatio
   let q = safeQuoted(cleanLabel)
   let suffix = appContextSuffix(step, location: location)
   let verb = actionVerb(step.action)
+  let rightClickVerb = localizedVerb("Right-click")
+  let doubleClickVerb = localizedVerb("Double-click")
+  let pressVerb = localizedVerb("Press")
 
   var s: String
   if kind == "close button" {
     let app = step.app.trimmingCharacters(in: .whitespacesAndNewlines)
     if !app.isEmpty && app.lowercased() != "application" && app.lowercased() != "dock" {
-      s = "Close the \(app) window."
+      s = l("Close the \(app) window.", "Schließe das \(app)-Fenster.")
     } else {
-      s = "Close the window."
+      s = l("Close the window.", "Schließe das Fenster.")
     }
   } else if kind == "minimize button" {
     let app = step.app.trimmingCharacters(in: .whitespacesAndNewlines)
     if !app.isEmpty && app.lowercased() != "application" && app.lowercased() != "dock" {
-      s = "Minimize the \(app) window."
+      s = l("Minimize the \(app) window.", "Minimiere das \(app)-Fenster.")
     } else {
-      s = "Minimize the window."
+      s = l("Minimize the window.", "Minimiere das Fenster.")
     }
   } else if kind == "zoom button" {
     let app = step.app.trimmingCharacters(in: .whitespacesAndNewlines)
     if !app.isEmpty && app.lowercased() != "application" && app.lowercased() != "dock" {
-      s = "Zoom the \(app) window."
+      s = l("Zoom the \(app) window.", "Vergrößere das \(app)-Fenster.")
     } else {
-      s = "Zoom the window."
+      s = l("Zoom the window.", "Vergrößere das Fenster.")
     }
   } else if kind == "menu bar item" {
     let app = step.app.trimmingCharacters(in: .whitespacesAndNewlines)
     if !app.isEmpty && app.lowercased() != "application" && app.lowercased() != "dock" {
-      s = "Click the \(app) icon in the menu bar to open its menu."
+      s = l(
+        "Click the \(app) icon in the menu bar to open its menu.",
+        "Klicke auf das \(app)-Symbol in der Menüleiste, um das Menü zu öffnen."
+      )
     } else if !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      s = "Click \(q) in the menu bar to open its menu."
+      s = l(
+        "Click \(q) in the menu bar to open its menu.",
+        "Klicke in der Menüleiste auf \(q), um das Menü zu öffnen."
+      )
     } else {
-      s = "Click the menu bar icon to open its menu."
+      s = l(
+        "Click the menu bar icon to open its menu.",
+        "Klicke auf das Menüleisten-Symbol, um das Menü zu öffnen."
+      )
     }
   } else if kind == "text field" {
     // We only record clicks (no global key capture); avoid pretending we saw typing.
     if label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      s = "Click the text field\(suffix)."
+      s = l("Click the text field\(suffix).", "Klicke auf das Textfeld\(suffix).")
     } else if label.allSatisfy({ $0.isLetter || $0.isNumber }) && !label.contains(" ") {
-      s = "Click the \(label) field\(suffix)."
+      s = l("Click the \(label) field\(suffix).", "Klicke auf das Feld \(label)\(suffix).")
     } else {
-      s = "Click \(q) field\(suffix)."
+      s = l("Click \(q) field\(suffix).", "Klicke auf das Feld \(q)\(suffix).")
     }
   } else if isDockStep(step) {
-    s = label.isEmpty ? "Open the app from the Dock." : "Open \(label) from the Dock."
+    s = label.isEmpty
+      ? l("Open the app from the Dock.", "Öffne die App im Dock.")
+      : l("Open \(label) from the Dock.", "Öffne \(label) im Dock.")
   } else if kind == "menu item" {
-    s = q.isEmpty ? "Choose the menu item\(suffix)." : "Choose \(q) from the menu\(suffix)."
+    s = q.isEmpty
+      ? l("Choose the menu item\(suffix).", "Wähle den Menüeintrag\(suffix).")
+      : l("Choose \(q) from the menu\(suffix).", "Wähle \(q) aus dem Menü\(suffix).")
   } else if kind == "checkbox" {
-    let checkboxAction = checkboxVerb(step)
-    s = q.isEmpty ? "\(checkboxAction) the checkbox\(suffix)." : "\(checkboxAction) \(q)\(suffix)."
+    let checkboxAction = localizedVerb(checkboxVerb(step))
+    s = q.isEmpty
+      ? l("\(checkboxAction) the checkbox\(suffix).", "\(checkboxAction) das Kontrollkästchen\(suffix).")
+      : "\(checkboxAction) \(q)\(suffix)."
   } else if verb == "Right-click" {
-    s = q.isEmpty ? "Right-click the \(kind)\(suffix)." : "Right-click \(q)\(suffix)."
+    s = q.isEmpty
+      ? "\(rightClickVerb) auf \(localizedKindNoun(kind))\(suffix)."
+      : "\(rightClickVerb) auf \(q)\(suffix)."
   } else if verb == "Double-click" {
-    s = q.isEmpty ? "Double-click the \(kind)\(suffix)." : "Double-click \(q)\(suffix)."
+    s = q.isEmpty
+      ? "\(doubleClickVerb) auf \(localizedKindNoun(kind))\(suffix)."
+      : "\(doubleClickVerb) auf \(q)\(suffix)."
   } else if verb == "Press" {
     let note = step.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     if !note.isEmpty {
-      s = "Press \(note)\(suffix)."
+      s = "\(pressVerb) \(note)\(suffix)."
     } else {
-      s = "Press the keyboard shortcut\(suffix)."
+      s = l("Press the keyboard shortcut\(suffix).", "Drücke das Tastenkürzel\(suffix).")
     }
   } else {
     switch kind {
     case "list item":
-      s = q.isEmpty ? "Select the item\(suffix)." : "Select \(q)\(suffix)."
+      s = q.isEmpty
+        ? l("Select the item\(suffix).", "Wähle das Element\(suffix).")
+        : l("Select \(q)\(suffix).", "Wähle \(q)\(suffix).")
     case "tab":
-      s = q.isEmpty ? "Click the tab\(suffix)." : "Click the \(q) tab\(suffix)."
+      s = q.isEmpty
+        ? l("Click the tab\(suffix).", "Klicke auf den Tab\(suffix).")
+        : l("Click the \(q) tab\(suffix).", "Klicke auf den Tab \(q)\(suffix).")
     case "button":
       if q.isEmpty {
-        s = "Click the button\(suffix)."
+        s = l("Click the button\(suffix).", "Klicke auf den Button\(suffix).")
       } else if cleanLabel.allSatisfy({ $0.isLetter || $0.isNumber || $0 == " " }) && !cleanLabel.contains(" ") {
-        s = "Click the \(cleanLabel) button\(suffix)."
+        s = l(
+          "Click the \(cleanLabel) button\(suffix).",
+          "Klicke auf den Button \(cleanLabel)\(suffix)."
+        )
       } else {
-        s = "Click \(q)\(suffix)."
+        s = l("Click \(q)\(suffix).", "Klicke auf \(q)\(suffix).")
       }
     default:
-      s = q.isEmpty ? "Click the item\(suffix)." : "Click \(q)\(suffix)."
+      s = q.isEmpty
+        ? l("Click the item\(suffix).", "Klicke auf das Element\(suffix).")
+        : l("Click \(q)\(suffix).", "Klicke auf \(q)\(suffix).")
     }
   }
 
@@ -1078,6 +1159,19 @@ func startsWithVerb(_ s: String) -> Bool {
     || t.hasPrefix("press")
     || t.hasPrefix("type")
     || t.hasPrefix("drag")
+    || t.hasPrefix("klicke")
+    || t.hasPrefix("doppelklicke")
+    || t.hasPrefix("wähle")
+    || t.hasPrefix("waehle")
+    || t.hasPrefix("öffne")
+    || t.hasPrefix("oeffne")
+    || t.hasPrefix("schließe")
+    || t.hasPrefix("schliesse")
+    || t.hasPrefix("aktiviere")
+    || t.hasPrefix("deaktiviere")
+    || t.hasPrefix("drücke")
+    || t.hasPrefix("druecke")
+    || t.hasPrefix("ziehe")
 }
 
 struct QualityGateDecision {
@@ -1114,7 +1208,7 @@ func applyQualityGate(step: StepInput, kind: String, baseline: String, candidate
     return QualityGateDecision(text: baseline, reason: "prefer_baseline_for_kind")
   }
 
-  let pref = preferredVerb(step, kind: kind).lowercased()
+  let pref = localizedVerb(preferredVerb(step, kind: kind)).lowercased()
   if !cand.lowercased().hasPrefix(pref) {
     // Keep the style consistent and avoid generic verbs ("Click") when we have a stronger signal.
     return QualityGateDecision(text: baseline, reason: "candidate_wrong_verb")
@@ -1123,13 +1217,22 @@ func applyQualityGate(step: StepInput, kind: String, baseline: String, candidate
   if isDockStep(step) && !candNorm.contains("dock") {
     return QualityGateDecision(text: baseline, reason: "dock_context_missing")
   }
-  if kind == "menu item" && !candNorm.contains("menu") {
+  if kind == "menu item"
+    && !candNorm.contains("menu")
+    && !candNorm.contains("menü")
+  {
     return QualityGateDecision(text: baseline, reason: "menu_context_missing")
   }
-  if kind == "menu bar item" && !candNorm.contains("menu bar") {
+  if kind == "menu bar item"
+    && !candNorm.contains("menu bar")
+    && !candNorm.contains("menüleiste")
+  {
     return QualityGateDecision(text: baseline, reason: "menu_bar_context_missing")
   }
-  if kind != "tab" && candNorm.contains(" tab") {
+  if kind != "tab"
+    && (candNorm.contains(" tab")
+      || candNorm.contains(" registerkarte"))
+  {
     // Avoid "tab" hallucinations when we don't have a tab signal.
     return QualityGateDecision(text: baseline, reason: "tab_hallucination")
   }
@@ -1203,54 +1306,84 @@ func promptForStep(
   maxChars: Int
 ) -> String {
   var lines: [String] = []
-  lines.append("Write ONE short UI tutorial step description.")
-  lines.append("Rules:")
-  lines.append("- ONE sentence, max \(maxChars) characters.")
-  lines.append("- Start with a verb (e.g. Click, Double-click, Right-click, Close, Open, Choose, Select).")
-  lines.append("- No numbering, no markdown, no quotes unless quoting a UI label.")
-  lines.append("- Do NOT invent UI labels. Use the provided label; if missing, stay generic.")
-  lines.append("- Avoid vague output like \"Click Finder.\"; include location when known (Dock/menu/dialog).")
-  lines.append("- If unsure, return the Baseline exactly.")
-  lines.append("- Return ONLY the description text.")
+  lines.append(l(
+    "Write ONE short UI tutorial step description.",
+    "Schreibe EINE kurze UI-Tutorial-Schrittbeschreibung."
+  ))
+  lines.append(l("Rules:", "Regeln:"))
+  lines.append(l(
+    "- ONE sentence, max \(maxChars) characters.",
+    "- EINE Satzzeile, maximal \(maxChars) Zeichen."
+  ))
+  lines.append(l(
+    "- Start with a verb (e.g. Click, Double-click, Right-click, Close, Open, Choose, Select).",
+    "- Starte mit einem Verb (z. B. Klicke, Doppelklicke, Wähle, Öffne, Schließe)."
+  ))
+  lines.append(l(
+    "- No numbering, no markdown, no quotes unless quoting a UI label.",
+    "- Keine Nummerierung, kein Markdown, keine Anführungszeichen außer bei UI-Labels."
+  ))
+  lines.append(l(
+    "- Do NOT invent UI labels. Use the provided label; if missing, stay generic.",
+    "- Erfinde KEINE UI-Labels. Nutze nur bereitgestellte Labels; sonst bleibe generisch."
+  ))
+  lines.append(l(
+    "- Avoid vague output like \"Click Finder.\"; include location when known (Dock/menu/dialog).",
+    "- Vermeide vage Ausgaben wie \"Klicke Finder.\"; nutze Ortshinweise (Dock/Menü/Dialog), wenn bekannt."
+  ))
+  lines.append(l(
+    "- If unsure, return the Baseline exactly.",
+    "- Wenn unsicher, gib die Baseline exakt zurück."
+  ))
+  lines.append(l(
+    "- Return ONLY the description text.",
+    "- Gib NUR den Beschreibungstext zurück."
+  ))
   lines.append("")
-  lines.append("Detected UI element kind: \(kind)")
-  lines.append("Click position: x=\(Int(step.clickXPercent))% y=\(Int(step.clickYPercent))% (from top-left)")
-  lines.append("Preferred verb: \(preferredVerb(step, kind: kind))")
-  if let location = location { lines.append("Location hint: \(location)") }
+  lines.append(l("Detected UI element kind: \(kind)", "Erkannter UI-Elementtyp: \(kind)"))
+  lines.append(l(
+    "Click position: x=\(Int(step.clickXPercent))% y=\(Int(step.clickYPercent))% (from top-left)",
+    "Klickposition: x=\(Int(step.clickXPercent))% y=\(Int(step.clickYPercent))% (von oben links)"
+  ))
+  lines.append(l(
+    "Preferred verb: \(localizedVerb(preferredVerb(step, kind: kind)))",
+    "Bevorzugtes Verb: \(localizedVerb(preferredVerb(step, kind: kind)))"
+  ))
+  if let location = location { lines.append(l("Location hint: \(location)", "Ortshinweis: \(location)")) }
   if !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-    lines.append("Grounding label: \(label)")
+    lines.append(l("Grounding label: \(label)", "Grounding-Label: \(label)"))
   }
   if let ocr = ocr, !ocr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-    lines.append("OCR near click: \(ocr)")
+    lines.append(l("OCR near click: \(ocr)", "OCR nahe Klick: \(ocr)"))
   }
-  lines.append("Baseline (safe): \(baseline)")
+  lines.append(l("Baseline (safe): \(baseline)", "Baseline (sicher): \(baseline)"))
   lines.append("")
-  lines.append("Action: \(actionVerb(step.action))")
-  lines.append("App: \(step.app)")
+  lines.append(l("Action: \(localizedVerb(actionVerb(step.action)))", "Aktion: \(localizedVerb(actionVerb(step.action)))"))
+  lines.append(l("App: \(step.app)", "App: \(step.app)"))
   if !step.windowTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-    lines.append("Window title: \(step.windowTitle)")
+    lines.append(l("Window title: \(step.windowTitle)", "Fenstertitel: \(step.windowTitle)"))
   }
   if let ax = step.ax {
-    lines.append("AX role: \(ax.role)")
-    if let sub = ax.subrole { lines.append("AX subrole: \(sub)") }
-    if let desc = ax.roleDescription { lines.append("AX role description: \(desc)") }
-    if let ident = ax.identifier { lines.append("AX identifier: \(ident)") }
-    lines.append("AX label: \(ax.label)")
-    if let containerRole = ax.containerRole { lines.append("AX container role: \(containerRole)") }
-    if let containerSub = ax.containerSubrole { lines.append("AX container subrole: \(containerSub)") }
-    if let containerIdent = ax.containerIdentifier { lines.append("AX container identifier: \(containerIdent)") }
-    if let windowRole = ax.windowRole { lines.append("AX window role: \(windowRole)") }
-    if let windowSubrole = ax.windowSubrole { lines.append("AX window subrole: \(windowSubrole)") }
-    if let topRole = ax.topLevelRole { lines.append("AX top role: \(topRole)") }
-    if let topSubrole = ax.topLevelSubrole { lines.append("AX top subrole: \(topSubrole)") }
-    if let dialogRole = ax.parentDialogRole { lines.append("AX dialog role: \(dialogRole)") }
-    if let dialogSub = ax.parentDialogSubrole { lines.append("AX dialog subrole: \(dialogSub)") }
-    if let checked = ax.isChecked { lines.append("AX checked: \(checked ? "true" : "false")") }
-    if ax.isDefaultButton { lines.append("AX hint: default button") }
-    if ax.isCancelButton { lines.append("AX hint: cancel button") }
+    lines.append(l("AX role: \(ax.role)", "AX-Rolle: \(ax.role)"))
+    if let sub = ax.subrole { lines.append(l("AX subrole: \(sub)", "AX-Unterrolle: \(sub)")) }
+    if let desc = ax.roleDescription { lines.append(l("AX role description: \(desc)", "AX-Rollenbeschreibung: \(desc)")) }
+    if let ident = ax.identifier { lines.append(l("AX identifier: \(ident)", "AX-Identifier: \(ident)")) }
+    lines.append(l("AX label: \(ax.label)", "AX-Label: \(ax.label)"))
+    if let containerRole = ax.containerRole { lines.append(l("AX container role: \(containerRole)", "AX-Containerrolle: \(containerRole)")) }
+    if let containerSub = ax.containerSubrole { lines.append(l("AX container subrole: \(containerSub)", "AX-Containerunterrolle: \(containerSub)")) }
+    if let containerIdent = ax.containerIdentifier { lines.append(l("AX container identifier: \(containerIdent)", "AX-Container-Identifier: \(containerIdent)")) }
+    if let windowRole = ax.windowRole { lines.append(l("AX window role: \(windowRole)", "AX-Fensterrolle: \(windowRole)")) }
+    if let windowSubrole = ax.windowSubrole { lines.append(l("AX window subrole: \(windowSubrole)", "AX-Fensterunterrolle: \(windowSubrole)")) }
+    if let topRole = ax.topLevelRole { lines.append(l("AX top role: \(topRole)", "AX-Toprolle: \(topRole)")) }
+    if let topSubrole = ax.topLevelSubrole { lines.append(l("AX top subrole: \(topSubrole)", "AX-Topunterrolle: \(topSubrole)")) }
+    if let dialogRole = ax.parentDialogRole { lines.append(l("AX dialog role: \(dialogRole)", "AX-Dialogrolle: \(dialogRole)")) }
+    if let dialogSub = ax.parentDialogSubrole { lines.append(l("AX dialog subrole: \(dialogSub)", "AX-Dialogunterrolle: \(dialogSub)")) }
+    if let checked = ax.isChecked { lines.append(l("AX checked: \(checked ? "true" : "false")", "AX aktiviert: \(checked ? "true" : "false")")) }
+    if ax.isDefaultButton { lines.append(l("AX hint: default button", "AX-Hinweis: Standardbutton")) }
+    if ax.isCancelButton { lines.append(l("AX hint: cancel button", "AX-Hinweis: Abbrechen-Button")) }
   }
   if let note = step.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-    lines.append("User note: \(note)")
+    lines.append(l("User note: \(note)", "Benutzernotiz: \(note)"))
   }
   return lines.joined(separator: "\n")
 }
