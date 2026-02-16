@@ -345,6 +345,7 @@ html, body {
 .editor-step-pill {
   display: inline-flex;
   align-items: center;
+  gap: 3px;
   padding: 2px 7px;
   border-radius: 999px;
   font-size: 10px;
@@ -352,6 +353,9 @@ html, body {
   letter-spacing: 0.02em;
   background: var(--bg-secondary);
   color: var(--text-secondary);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .editor-step-pill.ai {
