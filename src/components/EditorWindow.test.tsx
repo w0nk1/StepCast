@@ -168,8 +168,9 @@ describe("EditorWindow", () => {
     });
   });
 
-  it("deletes step via delete button", async () => {
-    const user = userEvent.setup();
+  it("deletes step via delete button with undo toast", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
     mockInvoke.mockResolvedValue(undefined);
 
@@ -179,8 +180,38 @@ describe("EditorWindow", () => {
     });
 
     await user.click(screen.getByTitle("Remove step"));
-    expect(mockInvoke).toHaveBeenCalledWith("delete_step", { stepId: "step-1" });
+    // Step removed from UI immediately
     expect(screen.getByText("No steps recorded yet")).toBeInTheDocument();
+    // Undo toast shown
+    expect(screen.getByText("Step deleted")).toBeInTheDocument();
+    // Backend not called yet (soft delete)
+    expect(mockInvoke).not.toHaveBeenCalledWith("delete_step", { stepId: "step-1" });
+
+    // After 3s, backend is called
+    act(() => { vi.advanceTimersByTime(3000); });
+    expect(mockInvoke).toHaveBeenCalledWith("delete_step", { stepId: "step-1" });
+    vi.useRealTimers();
+  });
+
+  it("restores step on undo", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+    mockInvoke.mockResolvedValue(undefined);
+
+    render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTitle("Remove step"));
+    expect(screen.getByText("No steps recorded yet")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    expect(screen.queryByText("Step deleted")).not.toBeInTheDocument();
+    expect(mockInvoke).not.toHaveBeenCalledWith("delete_step", { stepId: "step-1" });
+    vi.useRealTimers();
   });
 
   it("removes step on step-deleted event", async () => {
@@ -376,5 +407,53 @@ describe("EditorWindow", () => {
       expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
     });
     expect(() => unmount()).not.toThrow();
+  });
+
+  it("navigates steps with arrow keys and shows focus ring", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce([
+      makeStep({ id: "step-1", app: "Finder" }),
+      makeStep({ id: "step-2", app: "Safari" }),
+    ]);
+
+    const { container } = render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    const scrollEl = container.querySelector(".editor-scroll") as HTMLElement;
+    scrollEl.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(container.querySelector(".editor-step.is-focused")).toBeInTheDocument();
+
+    await user.keyboard("{ArrowDown}");
+    const focused = container.querySelectorAll(".editor-step");
+    expect(focused[1].classList.contains("is-focused")).toBe(true);
+
+    await user.keyboard("{Escape}");
+    expect(container.querySelector(".editor-step.is-focused")).not.toBeInTheDocument();
+  });
+
+  it("shows bulk toolbar when steps are selected", async () => {
+    const user = userEvent.setup();
+    mockInvoke.mockResolvedValueOnce([
+      makeStep({ id: "step-1", app: "Finder" }),
+      makeStep({ id: "step-2", app: "Safari" }),
+    ]);
+
+    const { container } = render(<EditorWindow />);
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    const checkboxes = container.querySelectorAll(".editor-step-checkbox");
+    await user.click(checkboxes[0]);
+
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deselect" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Deselect" }));
+    expect(screen.queryByText("1 selected")).not.toBeInTheDocument();
   });
 });

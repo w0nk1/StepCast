@@ -39,6 +39,7 @@ html, body {
   flex: 1;
   overflow-y: auto;
   padding-bottom: 64px;
+  outline: none;
 }
 
 .editor-toolbar-left {
@@ -82,11 +83,11 @@ html, body {
   position: relative;
 }
 
-/* Vertical connector line */
+/* Vertical connector line (16px handle + 12px gap + 15px badge center = 43px) */
 .editor-steps::before {
   content: "";
   position: absolute;
-  left: 15px;
+  left: 43px;
   top: 16px;
   bottom: 16px;
   width: 2px;
@@ -94,11 +95,41 @@ html, body {
   border-radius: 1px;
 }
 
-/* Timeline item: badge + card row */
+/* Drag handle */
+.editor-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  padding: 0;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+
+.editor-drag-handle:active {
+  cursor: grabbing;
+}
+
+.editor-timeline-item:hover .editor-drag-handle {
+  opacity: 0.5;
+}
+
+.editor-timeline-item:hover .editor-drag-handle:hover {
+  opacity: 1;
+}
+
+/* Timeline item: drag handle + badge + card row */
 .editor-timeline-item {
   display: grid;
-  grid-template-columns: 32px 1fr;
-  gap: 16px;
+  grid-template-columns: 16px 32px 1fr;
+  gap: 0 12px;
   padding-bottom: 24px;
   position: relative;
 }
@@ -142,6 +173,11 @@ html, body {
     0 2px 8px rgba(0, 0, 0, 0.06),
     0 8px 24px rgba(0, 0, 0, 0.06);
   transform: translateY(-1px);
+}
+
+/* #5 Keyboard focus ring */
+.editor-step.is-focused {
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 /* Dark mode: stronger shadows + inset highlight */
@@ -233,6 +269,79 @@ html, body {
   gap: 8px;
 }
 
+/* AI generation — pulsing card border */
+@keyframes ai-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.15); }
+  50%      { box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.45); }
+}
+
+.editor-step.is-generating {
+  animation: ai-pulse 1.8s ease-in-out infinite;
+  border-color: rgba(255, 149, 0, 0.35);
+}
+
+/* Shimmer skeleton inside description button */
+@keyframes shimmer-slide {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.editor-step-desc-shimmer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.editor-step-desc-shimmer .shimmer-bar {
+  display: block;
+  height: 10px;
+  width: 75%;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 25%,
+    rgba(255, 149, 0, 0.18) 50%,
+    var(--bg-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-slide 1.6s ease-in-out infinite;
+}
+
+.editor-step-desc-shimmer .shimmer-bar.short {
+  width: 45%;
+}
+
+/* Toolbar generating indicator */
+.editor-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-toolbar-generating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning, #ff9500);
+}
+
+@keyframes toolbar-spin {
+  to { transform: rotate(360deg); }
+}
+
+.editor-toolbar-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 149, 0, 0.25);
+  border-top-color: var(--warning, #ff9500);
+  border-radius: 50%;
+  animation: toolbar-spin 0.8s linear infinite;
+}
+
 .editor-step-pill {
   display: inline-flex;
   align-items: center;
@@ -303,6 +412,15 @@ html, body {
 .editor-step-crop:hover {
   background: var(--bg-secondary);
   color: var(--text-primary);
+}
+
+.editor-step-crop.is-cropped {
+  background: rgba(124, 92, 252, 0.12);
+  color: var(--accent);
+}
+
+.editor-step-crop.is-cropped:hover {
+  background: rgba(124, 92, 252, 0.2);
 }
 
 .editor-step-delete {
@@ -536,4 +654,266 @@ html, body {
   resize: vertical;
   outline: none;
   box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* #6 Failed AI retry button */
+.editor-step-retry {
+  border: none;
+  background: transparent;
+  color: var(--danger, #ff3b30);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s ease;
+}
+
+.editor-step-retry:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.12);
+}
+
+.editor-step-retry:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* #7 Note indicator in header */
+.editor-step-note-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* #10 Selection checkbox */
+.editor-step-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step:hover .editor-step-checkbox,
+.editor-step-checkbox.is-visible,
+.editor-step-checkbox.is-checked {
+  opacity: 1;
+}
+
+.editor-step-checkbox.is-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.editor-step-checkbox:hover:not(.is-checked) {
+  border-color: var(--accent);
+}
+
+/* #10 Selected card */
+.editor-step.is-selected {
+  border-color: var(--accent);
+  background: rgba(124, 92, 252, 0.04);
+}
+
+/* #10 Toolbar selection count */
+.editor-toolbar-selection-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* #8 Collapse chevron */
+.editor-step-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-step-collapse.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.editor-step-collapse:hover {
+  color: var(--text-primary);
+}
+
+/* #4 Image expand button */
+.editor-image-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-image-wrapper:hover .editor-image-expand {
+  opacity: 1;
+}
+
+.editor-image-expand:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* #4 Image lightbox */
+.editor-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  cursor: pointer;
+}
+
+.editor-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.editor-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.editor-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* #9 Badge action sub-icon */
+.editor-timeline-badge {
+  position: relative;
+}
+
+.editor-badge-action {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+/* #1 Undo toast */
+@keyframes undo-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.editor-undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 80;
+  animation: undo-slide-up 0.2s ease-out;
+}
+
+.editor-undo-message {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.editor-undo-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.editor-undo-btn:hover {
+  background: rgba(124, 92, 252, 0.12);
+}
+
+.editor-undo-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.editor-undo-dismiss:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
 }

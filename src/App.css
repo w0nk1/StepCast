@@ -708,7 +708,8 @@ button:focus, button:focus-visible {
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
-  right: 0;
+  min-width: 100%;
+  width: max-content;
   z-index: 20;
   background: var(--bg-primary);
   border: 1px solid var(--border);
@@ -731,6 +732,7 @@ button:focus, button:focus-visible {
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
   -webkit-app-region: no-drag;
 }
 

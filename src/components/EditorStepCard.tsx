@@ -1,14 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import ReactCrop, { type PercentCrop } from "react-image-crop";
+import CropEditorModal from "./CropEditorModal";
+import StepScreenshot from "./StepScreenshot";
 import type { BoundsPercent, Step } from "../types/step";
-import {
-  getCropAspectRatio,
-  getCroppedImageStyles,
-  isFullCrop,
-  markerPositionForStep,
-  normalizeCropRegion,
-} from "../utils/stepCrop";
 
 type EditorStepCardProps = {
   step: Step;
@@ -19,38 +15,13 @@ type EditorStepCardProps = {
   onUpdateCrop: (stepId: string, cropRegion: BoundsPercent | null) => void;
   aiEnabled: boolean;
   onDelete: (stepId: string) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: (stepId: string) => void;
+  isFocused?: boolean;
+  isSelected?: boolean;
+  isSelectionActive?: boolean;
+  onToggleSelect?: (stepId: string, shiftKey: boolean) => void;
 };
-
-const FULL_PERCENT_CROP: PercentCrop = {
-  unit: "%",
-  x: 0,
-  y: 0,
-  width: 100,
-  height: 100,
-};
-
-function toPercentCrop(cropRegion?: BoundsPercent | null): PercentCrop {
-  const crop = normalizeCropRegion(cropRegion);
-  if (!crop) return { ...FULL_PERCENT_CROP };
-  return {
-    unit: "%",
-    x: crop.x_percent,
-    y: crop.y_percent,
-    width: crop.width_percent,
-    height: crop.height_percent,
-  };
-}
-
-function toBoundsPercent(crop: PercentCrop): BoundsPercent | null {
-  const normalized = normalizeCropRegion({
-    x_percent: crop.x ?? 0,
-    y_percent: crop.y ?? 0,
-    width_percent: crop.width ?? 0,
-    height_percent: crop.height ?? 0,
-  });
-  if (!normalized) return null;
-  return isFullCrop(normalized) ? null : normalized;
-}
 
 export default memo(function EditorStepCard({
   step,
@@ -61,7 +32,36 @@ export default memo(function EditorStepCard({
   onUpdateCrop,
   aiEnabled,
   onDelete,
+  collapsed = false,
+  onToggleCollapse,
+  isFocused = false,
+  isSelected = false,
+  isSelectionActive = false,
+  onToggleSelect,
 }: EditorStepCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: step.id });
+
+  const sortableStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  };
+
+  const articleRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (isFocused && articleRef.current) {
+      articleRef.current.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    }
+  }, [isFocused]);
+
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState(step.note ?? "");
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -71,50 +71,15 @@ export default memo(function EditorStepCard({
   const descInputRef = useRef<HTMLInputElement>(null);
 
   const [cropOpen, setCropOpen] = useState(false);
-  const [cropDraft, setCropDraft] = useState<PercentCrop>(() => toPercentCrop(step.crop_region));
-  const [dragCrop, setDragCrop] = useState<BoundsPercent | null>(null);
-  const [isCropDragging, setIsCropDragging] = useState(false);
-  const [imageRetry, setImageRetry] = useState(0);
   const [imageNaturalSize, setImageNaturalSize] = useState<{ width: number; height: number }>({
     width: 0,
     height: 0,
   });
-  const dragRafRef = useRef<number | null>(null);
-  const dragPendingCropRef = useRef<BoundsPercent | null>(null);
-  const cropDragRef = useRef<{
-    pointerId: number;
-    startClientX: number;
-    startClientY: number;
-    frameWidth: number;
-    frameHeight: number;
-    startCrop: BoundsPercent;
-    moved: boolean;
-    latestCrop: BoundsPercent;
-  } | null>(null);
 
-  useEffect(() => {
-    setImageRetry(0);
-  }, [step.screenshot_path]);
-
-  useEffect(() => {
-    return () => {
-      if (dragRafRef.current != null) {
-        cancelAnimationFrame(dragRafRef.current);
-        dragRafRef.current = null;
-      }
-    };
-  }, []);
-
-  const screenshotBaseSrc = useMemo(
+  const screenshotSrc = useMemo(
     () => (step.screenshot_path ? convertFileSrc(step.screenshot_path) : null),
     [step.screenshot_path],
   );
-  const screenshotSrc = useMemo(() => {
-    if (!screenshotBaseSrc) return null;
-    if (imageRetry === 0) return screenshotBaseSrc;
-    const sep = screenshotBaseSrc.includes("?") ? "&" : "?";
-    return `${screenshotBaseSrc}${sep}retry=${imageRetry}`;
-  }, [imageRetry, screenshotBaseSrc]);
 
   const isAuthPlaceholder =
     step.window_title === "Authentication dialog (secure)" ||
@@ -140,133 +105,9 @@ export default memo(function EditorStepCard({
         ? step.description.trim()
         : `${actionDesc} ${step.app}`);
 
-  const markerClass =
-    step.action === "DoubleClick"
-      ? "click-indicator double-click"
-      : step.action === "RightClick"
-        ? "click-indicator right-click"
-        : "click-indicator";
-
   const isGenerating = step.description_status === "generating";
   const isFailed = step.description_status === "failed";
   const isAi = step.description_source === "ai";
-
-  const stepCrop = normalizeCropRegion(step.crop_region);
-  const normalizedCrop = dragCrop ?? stepCrop;
-
-  const frameAspect = useMemo(
-    () => getCropAspectRatio(imageNaturalSize.width, imageNaturalSize.height, normalizedCrop),
-    [imageNaturalSize.height, imageNaturalSize.width, normalizedCrop],
-  );
-
-  const shouldApplyCrop = Boolean(normalizedCrop && !isFullCrop(normalizedCrop));
-  const cropStyles = getCroppedImageStyles(shouldApplyCrop ? normalizedCrop : null);
-  const marker = markerPositionForStep(
-    shouldApplyCrop ? step : { ...step, crop_region: null },
-  );
-  const frameStyle = shouldApplyCrop
-    ? { width: "100%", aspectRatio: `${frameAspect ?? 16 / 9}` }
-    : undefined;
-  const frameClasses = [cropStyles.frameClassName];
-  if (shouldApplyCrop) frameClasses.push("is-crop-draggable");
-  if (isCropDragging) frameClasses.push("is-crop-dragging");
-
-  const clampCropPosition = (crop: BoundsPercent): BoundsPercent => {
-    const width = Math.max(2, Math.min(100, crop.width_percent));
-    const height = Math.max(2, Math.min(100, crop.height_percent));
-    const maxX = Math.max(0, 100 - width);
-    const maxY = Math.max(0, 100 - height);
-    return {
-      x_percent: Math.max(0, Math.min(maxX, crop.x_percent)),
-      y_percent: Math.max(0, Math.min(maxY, crop.y_percent)),
-      width_percent: width,
-      height_percent: height,
-    };
-  };
-  const cropDistance = (a: BoundsPercent, b: BoundsPercent) =>
-    Math.max(
-      Math.abs(a.x_percent - b.x_percent),
-      Math.abs(a.y_percent - b.y_percent),
-      Math.abs(a.width_percent - b.width_percent),
-      Math.abs(a.height_percent - b.height_percent),
-    );
-
-  const handleCropDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!shouldApplyCrop || !normalizedCrop) return;
-    if (e.button !== 0) return;
-    if (e.cancelable) e.preventDefault();
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (rect.width <= 1 || rect.height <= 1) return;
-
-    cropDragRef.current = {
-      pointerId: e.pointerId,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
-      frameWidth: rect.width,
-      frameHeight: rect.height,
-      startCrop: normalizedCrop,
-      moved: false,
-      latestCrop: normalizedCrop,
-    };
-    dragPendingCropRef.current = normalizedCrop;
-    setIsCropDragging(true);
-    setDragCrop(normalizedCrop);
-    if (typeof e.currentTarget.setPointerCapture === "function") {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
-  };
-
-  const handleCropDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = cropDragRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-
-    const dxPx = e.clientX - drag.startClientX;
-    const dyPx = e.clientY - drag.startClientY;
-
-    // Keep cursor/content movement direct: dragging right moves visible content right.
-    const dxCrop = -(dxPx / drag.frameWidth) * drag.startCrop.width_percent;
-    const dyCrop = -(dyPx / drag.frameHeight) * drag.startCrop.height_percent;
-
-    const nextCrop = clampCropPosition({
-      ...drag.startCrop,
-      x_percent: drag.startCrop.x_percent + dxCrop,
-      y_percent: drag.startCrop.y_percent + dyCrop,
-    });
-    drag.moved = cropDistance(nextCrop, drag.startCrop) > 0.02;
-    drag.latestCrop = nextCrop;
-    dragPendingCropRef.current = nextCrop;
-    if (dragRafRef.current == null) {
-      dragRafRef.current = requestAnimationFrame(() => {
-        dragRafRef.current = null;
-        if (dragPendingCropRef.current) {
-          setDragCrop(dragPendingCropRef.current);
-        }
-      });
-    }
-  };
-
-  const finishCropDrag = () => {
-    const drag = cropDragRef.current;
-    const finalCrop = drag?.latestCrop ?? null;
-    if (dragRafRef.current != null) {
-      cancelAnimationFrame(dragRafRef.current);
-      dragRafRef.current = null;
-    }
-    dragPendingCropRef.current = null;
-    cropDragRef.current = null;
-    setIsCropDragging(false);
-    if (finalCrop && drag?.moved) {
-      onUpdateCrop(step.id, finalCrop);
-    }
-    setDragCrop(null);
-  };
-
-  const handleCropDragEnd = (e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = cropDragRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    finishCropDrag();
-  };
 
   const handleStartNoteEdit = () => {
     setNoteDraft(step.note ?? "");
@@ -285,14 +126,11 @@ export default memo(function EditorStepCard({
       e.preventDefault();
       handleSaveNote();
     }
-    if (e.key === "Escape") {
-      setNoteEditing(false);
-    }
+    if (e.key === "Escape") setNoteEditing(false);
   };
 
   const handleStartDescEdit = () => {
-    if (isAuthPlaceholder) return;
-    if (isGenerating) return;
+    if (isAuthPlaceholder || isGenerating) return;
     setDescDraft(effectiveDescription);
     setDescEditing(true);
     requestAnimationFrame(() => descInputRef.current?.focus());
@@ -305,44 +143,81 @@ export default memo(function EditorStepCard({
   };
 
   const handleDescKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSaveDesc();
-    }
-    if (e.key === "Escape") {
-      setDescEditing(false);
-    }
+    if (e.key === "Enter") { e.preventDefault(); handleSaveDesc(); }
+    if (e.key === "Escape") setDescEditing(false);
   };
 
-  const handleOpenCropEditor = () => {
-    if (!screenshotSrc || isAuthPlaceholder) return;
-    setCropDraft(toPercentCrop(step.crop_region));
-    setCropOpen(true);
-  };
+  const shouldShowCropBtn = !isAuthPlaceholder && Boolean(step.screenshot_path);
 
-  const handleSaveCrop = () => {
-    onUpdateCrop(step.id, toBoundsPercent(cropDraft));
-    setCropOpen(false);
-  };
-
-  const handleResetCrop = () => {
-    onUpdateCrop(step.id, null);
-    setCropDraft({ ...FULL_PERCENT_CROP });
-    setCropOpen(false);
-  };
-  const handleImageError = () => {
-    if (imageRetry >= 2) return;
-    window.setTimeout(() => {
-      setImageRetry((prev) => (prev < 2 ? prev + 1 : prev));
-    }, 120);
-  };
+  const articleClass = [
+    "editor-step",
+    isGenerating && "is-generating",
+    isFocused && "is-focused",
+    isSelected && "is-selected",
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className="editor-timeline-item">
-      <div className="editor-timeline-badge">{index + 1}</div>
+    <div className="editor-timeline-item" ref={setNodeRef} style={sortableStyle} {...attributes}>
+      <button className="editor-drag-handle" {...listeners} title="Drag to reorder">
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+          <circle cx="3" cy="2" r="1.5"/><circle cx="7" cy="2" r="1.5"/>
+          <circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/>
+          <circle cx="3" cy="12" r="1.5"/><circle cx="7" cy="12" r="1.5"/>
+        </svg>
+      </button>
+      <div className="editor-timeline-badge">
+        {step.action === "Note" ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          </svg>
+        ) : (
+          index + 1
+        )}
+        {(step.action === "DoubleClick" || step.action === "RightClick" || step.action === "Shortcut") && (
+          <span className="editor-badge-action" title={step.action === "DoubleClick" ? "Double click" : step.action === "RightClick" ? "Right click" : "Keyboard shortcut"}>
+            {step.action === "DoubleClick" ? (
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="4" />
+              </svg>
+            ) : step.action === "RightClick" ? (
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
+              </svg>
+            ) : (
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h0M10 10h4" />
+              </svg>
+            )}
+          </span>
+        )}
+      </div>
 
-      <article className="editor-step">
+      <article ref={articleRef} className={articleClass}>
         <div className="editor-step-header">
+          {onToggleSelect && (
+            <button
+              className={`editor-step-checkbox${isSelected ? " is-checked" : ""}${isSelectionActive ? " is-visible" : ""}`}
+              onClick={(e) => onToggleSelect(step.id, e.shiftKey)}
+              title={isSelected ? "Deselect step" : "Select step"}
+            >
+              {isSelected && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </button>
+          )}
+          {onToggleCollapse && (
+            <button
+              className={`editor-step-collapse${collapsed ? " is-collapsed" : ""}`}
+              onClick={() => onToggleCollapse(step.id)}
+              title={collapsed ? "Expand step" : "Collapse step"}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+          )}
           {descEditing ? (
             <input
               ref={descInputRef}
@@ -360,16 +235,33 @@ export default memo(function EditorStepCard({
               title={isAuthPlaceholder ? undefined : "Edit description"}
               disabled={isAuthPlaceholder || isGenerating}
             >
-              {effectiveDescription}
+              {isGenerating ? (
+                <span className="editor-step-desc-shimmer">
+                  <span className="shimmer-bar" />
+                  <span className="shimmer-bar short" />
+                </span>
+              ) : (
+                effectiveDescription
+              )}
             </button>
           )}
 
           <div className="editor-step-header-actions">
-            {!isAuthPlaceholder && screenshotSrc && (
+            {step.note && (
+              <span
+                className="editor-step-note-indicator"
+                title={step.note.length > 50 ? `${step.note.slice(0, 50)}…` : step.note}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </span>
+            )}
+            {shouldShowCropBtn && (
               <button
-                className="editor-step-crop"
-                onClick={handleOpenCropEditor}
-                title="Adjust visible screenshot area"
+                className={`editor-step-crop${step.crop_region ? " is-cropped" : ""}`}
+                onClick={() => setCropOpen(true)}
+                title={step.crop_region ? "Cropped — click to adjust" : "Adjust visible screenshot area"}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 2v14a2 2 0 0 0 2 2h14" />
@@ -378,47 +270,36 @@ export default memo(function EditorStepCard({
               </button>
             )}
             {isGenerating && (
-              <span className="editor-step-pill generating" title="Generating with Apple Intelligence...">
-                AI…
-              </span>
+              <span className="editor-step-pill generating" title="Generating with Apple Intelligence...">AI…</span>
             )}
             {!isGenerating && isAi && (
-              <span className="editor-step-pill ai" title="Generated by Apple Intelligence">
-                AI
-              </span>
+              <span className="editor-step-pill ai" title="Generated by Apple Intelligence">AI</span>
             )}
             {isFailed && (
-              <span
-                className="editor-step-pill error"
-                title={step.description_error ?? "Apple Intelligence generation failed"}
-              >
-                AI!
-              </span>
+              <>
+                <span className="editor-step-pill error" title={step.description_error ?? "Apple Intelligence generation failed"}>AI!</span>
+                <button
+                  className="editor-step-retry"
+                  onClick={() => onGenerateDescription(step.id)}
+                  disabled={!aiEnabled}
+                  title={aiEnabled ? "Retry AI generation" : "Enable Apple Intelligence in Settings"}
+                >
+                  Retry
+                </button>
+              </>
             )}
             <button
               className="editor-step-ai"
               onClick={() => onGenerateDescription(step.id)}
               disabled={!aiEnabled || isGenerating || isAuthPlaceholder}
-              title={
-                !aiEnabled
-                  ? "Enable Apple Intelligence descriptions in StepCast Settings"
-                  : isGenerating
-                    ? "Generating..."
-                    : "Generate with Apple Intelligence"
-              }
+              title={!aiEnabled ? "Enable Apple Intelligence descriptions in StepCast Settings" : isGenerating ? "Generating..." : "Generate with Apple Intelligence"}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path
-                  fill="currentColor"
-                  d="M12 2.2l1.55 5.05 5.05 1.55-5.05 1.55L12 15.4l-1.55-5.05L5.4 8.8l5.05-1.55L12 2.2z"
-                />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5L10 2z" />
+                <path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" />
               </svg>
             </button>
-            <button
-              className="editor-step-delete"
-              onClick={() => onDelete(step.id)}
-              title="Remove step"
-            >
+            <button className="editor-step-delete" onClick={() => onDelete(step.id)} title="Remove step">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
@@ -426,119 +307,55 @@ export default memo(function EditorStepCard({
           </div>
         </div>
 
-        {screenshotSrc && (
-          <div className="editor-step-image">
-            <div className="editor-image-wrapper">
-              <div
-                className={frameClasses.join(" ")}
-                style={frameStyle}
-                onPointerDown={handleCropDragStart}
-                onPointerMove={handleCropDragMove}
-                onPointerUp={handleCropDragEnd}
-                onPointerCancel={handleCropDragEnd}
-                onLostPointerCapture={handleCropDragEnd}
-                onDragStart={(e) => e.preventDefault()}
-              >
-                <img
-                  src={screenshotSrc}
-                  alt={`Step ${index + 1}`}
-                  loading="lazy"
-                  decoding="async"
-                  style={cropStyles.imageStyle}
-                  onError={handleImageError}
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                      setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
-                    }
-                  }}
-                />
-                {!isAuthPlaceholder && marker.visible && (
-                  <div
-                    className={markerClass}
-                    style={{
-                      left: `${marker.xPercent}%`,
-                      top: `${marker.yPercent}%`,
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="editor-step-note-row">
-          {noteEditing ? (
-            <textarea
-              ref={noteTextareaRef}
-              className="editor-step-note-input"
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              onBlur={handleSaveNote}
-              onKeyDown={handleNoteKeyDown}
-              placeholder="Add a note..."
-              rows={2}
+        {!collapsed && (
+          <>
+            <StepScreenshot
+              step={step}
+              index={index}
+              isAuthPlaceholder={isAuthPlaceholder}
+              onUpdateCrop={onUpdateCrop}
+              onImageNaturalSize={setImageNaturalSize}
+              imageNaturalSize={imageNaturalSize}
             />
-          ) : (
-            <button
-              className={`editor-step-note-btn${step.note ? " has-note" : ""}`}
-              onClick={handleStartNoteEdit}
-            >
-              {step.note || "Add a note..."}
-            </button>
-          )}
-        </div>
+            <div className="editor-step-note-row">
+              {noteEditing ? (
+                <textarea
+                  ref={noteTextareaRef}
+                  className="editor-step-note-input"
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  onBlur={handleSaveNote}
+                  onKeyDown={handleNoteKeyDown}
+                  placeholder="Add a note..."
+                  rows={2}
+                />
+              ) : (
+                <button
+                  className={`editor-step-note-btn${step.note ? " has-note" : ""}`}
+                  onClick={handleStartNoteEdit}
+                >
+                  {step.note || "Add a note..."}
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </article>
 
       {cropOpen && screenshotSrc && (
-        <div className="editor-crop-overlay" onClick={() => setCropOpen(false)}>
-          <div className="editor-crop-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div className="editor-crop-header">
-              <div className="editor-crop-title">Adjust Focus Crop</div>
-              <button className="editor-crop-close" onClick={() => setCropOpen(false)} title="Close crop editor">
-                ×
-              </button>
-            </div>
-            <div className="editor-crop-body">
-              <ReactCrop
-                crop={cropDraft}
-                minWidth={8}
-                minHeight={8}
-                keepSelection
-                onChange={(_, percentCrop) => {
-                  setCropDraft({
-                    unit: "%",
-                    x: percentCrop.x ?? 0,
-                    y: percentCrop.y ?? 0,
-                    width: percentCrop.width ?? 100,
-                    height: percentCrop.height ?? 100,
-                  });
-                }}
-              >
-                <img
-                  src={screenshotSrc}
-                  alt={`Adjust crop for step ${index + 1}`}
-                  onError={handleImageError}
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                      setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
-                    }
-                  }}
-                />
-              </ReactCrop>
-            </div>
-            <div className="editor-crop-actions">
-              <button className="button ghost" onClick={handleResetCrop}>Reset</button>
-              <button className="button ghost" onClick={() => setCropOpen(false)}>Cancel</button>
-              <button className="button primary" onClick={handleSaveCrop}>Apply</button>
-            </div>
-          </div>
-        </div>
+        <CropEditorModal
+          screenshotSrc={screenshotSrc}
+          stepIndex={index}
+          initialCropRegion={step.crop_region}
+          clickXPercent={step.click_x_percent}
+          clickYPercent={step.click_y_percent}
+          action={step.action}
+          onSave={(crop) => { onUpdateCrop(step.id, crop); setCropOpen(false); }}
+          onReset={() => { onUpdateCrop(step.id, null); setCropOpen(false); }}
+          onClose={() => setCropOpen(false)}
+          onImageError={() => {}}
+          onImageLoad={(w, h) => setImageNaturalSize({ width: w, height: h })}
+        />
       )}
     </div>
   );

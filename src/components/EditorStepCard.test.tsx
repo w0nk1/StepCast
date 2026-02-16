@@ -642,6 +642,231 @@ describe("EditorStepCard", () => {
     expect(onUpdateCrop).not.toHaveBeenCalled();
   });
 
+  it("shows retry button next to failed AI pill", async () => {
+    const user = userEvent.setup();
+    const onGenerateDescription = vi.fn();
+    render(
+      <EditorStepCard
+        step={makeStep({ description_status: "failed", description_error: "timeout" })}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={onGenerateDescription}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    const retryBtn = screen.getByRole("button", { name: "Retry" });
+    expect(retryBtn).toBeInTheDocument();
+    await user.click(retryBtn);
+    expect(onGenerateDescription).toHaveBeenCalledWith("step-1");
+  });
+
+  it("disables retry button when AI is not enabled", () => {
+    render(
+      <EditorStepCard
+        step={makeStep({ description_status: "failed" })}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={false}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+  });
+
+  it("shows note indicator when step has a note", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep({ note: "Important info here" })}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    const indicator = container.querySelector(".editor-step-note-indicator");
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveAttribute("title", "Important info here");
+  });
+
+  it("hides note indicator when step has no note", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep({ note: null })}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".editor-step-note-indicator")).not.toBeInTheDocument();
+  });
+
+  it("shows pencil icon in badge for Note action", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep({ action: "Note" })}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    const badge = container.querySelector(".editor-timeline-badge");
+    expect(badge?.querySelector("svg")).toBeInTheDocument();
+    expect(badge?.textContent?.trim()).not.toBe("1");
+  });
+
+  it("hides screenshot and note when collapsed", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep()}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+        collapsed={true}
+        onToggleCollapse={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".editor-step-image")).not.toBeInTheDocument();
+    expect(container.querySelector(".editor-step-note-row")).not.toBeInTheDocument();
+  });
+
+  it("shows collapse chevron and calls toggle on click", async () => {
+    const user = userEvent.setup();
+    const onToggle = vi.fn();
+    render(
+      <EditorStepCard
+        step={makeStep()}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+        collapsed={false}
+        onToggleCollapse={onToggle}
+      />,
+    );
+    await user.click(screen.getByTitle("Collapse step"));
+    expect(onToggle).toHaveBeenCalledWith("step-1");
+  });
+
+  it("shows expand button on image wrapper", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep()}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".editor-image-expand")).toBeInTheDocument();
+  });
+
+  it("opens lightbox on expand button click", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep()}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByTitle("View full size"));
+    expect(container.querySelector(".editor-lightbox-overlay")).toBeInTheDocument();
+    await user.click(screen.getByTitle("Close lightbox"));
+    expect(container.querySelector(".editor-lightbox-overlay")).not.toBeInTheDocument();
+  });
+
+  it("shows action sub-badge for DoubleClick", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep({ action: "DoubleClick" })}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(container.querySelector(".editor-badge-action")).toBeInTheDocument();
+  });
+
+  it("shows checkbox and calls onToggleSelect", async () => {
+    const user = userEvent.setup();
+    const onToggleSelect = vi.fn();
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep()}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+        onToggleSelect={onToggleSelect}
+        isSelected={false}
+        isSelectionActive={false}
+      />,
+    );
+    const checkbox = container.querySelector(".editor-step-checkbox") as HTMLElement;
+    expect(checkbox).toBeInTheDocument();
+    await user.click(checkbox);
+    expect(onToggleSelect).toHaveBeenCalledWith("step-1", false);
+  });
+
+  it("shows checked state when selected", () => {
+    const { container } = render(
+      <EditorStepCard
+        step={makeStep()}
+        index={0}
+        onUpdateNote={vi.fn()}
+        onUpdateDescription={vi.fn()}
+        onGenerateDescription={vi.fn()}
+        onUpdateCrop={vi.fn()}
+        aiEnabled={true}
+        onDelete={vi.fn()}
+        onToggleSelect={vi.fn()}
+        isSelected={true}
+        isSelectionActive={true}
+      />,
+    );
+    expect(container.querySelector(".editor-step-checkbox.is-checked")).toBeInTheDocument();
+    expect(container.querySelector(".editor-step.is-selected")).toBeInTheDocument();
+  });
+
   it("retries image loading on error up to max retries", async () => {
     mockConvertFileSrc.mockReturnValue("asset://localhost//tmp/screenshot.png");
     const { container } = render(
