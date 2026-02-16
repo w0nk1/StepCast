@@ -281,3 +281,6 @@
 
 2026-02-16 (recorder-own-app-filter-hardening)
 - Default: own-app click filtering checks resolved capture app names (`actual_app_name` / `capture_window.app_name`) in addition to AX `clicked_info`; reason: menu-bar clicks can be attributed by AX to system hosts and otherwise leak StepCast clicks into recorded steps.
+
+2026-02-16 (doubleclick-list-grounding-safety)
+- Default: for `DoubleClick` on list items, do not let OCR become primary grounding when AX label is generic/empty; reason: list OCR can drift to adjacent rows and produce confidently wrong filenames, so generic baseline is safer than mislabeling.

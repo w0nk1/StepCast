@@ -935,6 +935,15 @@ func chooseGroundingLabel(_ step: StepInput, kind: String) -> (label: String, oc
     return candidate
   }()
 
+  // Double-click list interactions are prone to stale/adjacent OCR labels when AX only exposes
+  // generic list metadata (e.g., "RTF-Dokument"). Prefer a generic baseline over wrong filenames.
+  if kind == "list item" && step.action == "DoubleClick" {
+    if axLabel.isEmpty || axGeneric {
+      return (label: "", ocr: nil)
+    }
+    return (label: axLabel, ocr: ocr)
+  }
+
   if step.action == "RightClick" {
     // Right-click: prefer OCR near click for row targets, including folder names without file extensions.
     if let ocr = ocr, !ocr.isEmpty {

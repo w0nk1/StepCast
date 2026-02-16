@@ -392,3 +392,7 @@
 - Investigated recorder session logs under `~/Library/Caches/com.w0nk1.stepcast/sessions/*/recording.log` for own-app leak reports; confirmed edge case where StepCast clicks can bypass the early AX-based filter when AX app attribution is ambiguous.
 - Hardened own-app filtering in `src-tauri/src/recorder/pipeline/mod.rs` by checking resolved capture target app names (`actual_app_name` and `capture_window.app_name`) before step creation.
 - Added unit coverage for StepCast name matching variants in `src-tauri/src/recorder/pipeline/mod.rs` and spec `docs/specs/2026-02-16-recorder-own-app-filter-hardening.md`.
+2026-02-16
+- Analyzed new mis-grounding session `81bed02c-9fe3-4628-966d-6bc1341926df`: `step-002` double-click list interaction had generic AX label (`QuickTime-Film` / `RTF-Dokument`) while OCR grounding drifted to adjacent filename.
+- Added safety guard in `src-tauri/swift/stepcast_ai_helper_descriptions.swift`: for `DoubleClick` + `list item`, OCR is no longer primary grounding when AX label is generic/empty.
+- Added focused spec `docs/specs/2026-02-16-doubleclick-list-grounding-safety.md`.
