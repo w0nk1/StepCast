@@ -7,6 +7,7 @@
 ## Design
 - Update `.github/workflows/codex-feedback-loop.yml` review lookup to use `gh api --paginate --slurp | jq -r ...`.
 - Flatten paginated pages inside `jq` before filtering codex `COMMENTED` reviews and selecting the latest id.
+- Keep closed-PR no-op echo YAML-safe by removing inline `#` from plain-scalar `run:` command.
 - Add a regression test that asserts the workflow keeps `--slurp` in the `pulls/$PR/reviews` lookup command.
 
 ## Verification

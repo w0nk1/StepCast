@@ -384,5 +384,7 @@
 - Result: dedupe marker keys by real review id instead of static `review-latest`, so later manual runs are no longer blocked after earlier autofix comments.
 2026-02-16
 - Reviewed PR #8 codex feedback and fixed remaining pagination edge case in `.github/workflows/codex-feedback-loop.yml`: review lookup now uses `gh api --paginate --slurp | jq -r ...` and flattens pages before selecting latest codex review id.
+- Follow-up from workflow smoke test: fixed YAML parsing bug in closed-PR no-op step by removing inline `#` from `run: echo "PR ..."` message (plain-scalar comment truncation).
 - Added regression coverage `src/utils/codexFeedbackWorkflow.test.ts` to guard against reintroducing paginated lookup without `--slurp`.
+- Extended regression coverage `src/utils/codexFeedbackWorkflow.test.ts` for YAML-safe closed-PR no-op command.
 - Added focused spec `docs/specs/2026-02-16-codex-feedback-loop-review-id-pagination.md`.

@@ -6,4 +6,9 @@ describe("codex feedback workflow review lookup", () => {
     expect(workflow).toContain('pulls/$PR/reviews" --paginate --slurp | jq -r');
     expect(workflow).not.toContain('pulls/$PR/reviews" --paginate --jq');
   });
+
+  it("keeps closed-pr no-op log message yaml-safe (no inline # truncation)", () => {
+    expect(workflow).toContain('run: echo "PR ${{ steps.ctx.outputs.pr_number }} is not open; skipping."');
+    expect(workflow).not.toContain('run: echo "PR #${{ steps.ctx.outputs.pr_number }} is not open; skipping."');
+  });
 });
