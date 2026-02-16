@@ -2,6 +2,7 @@ import { useState } from "react";
 import ReactCrop, { type PercentCrop } from "react-image-crop";
 import type { BoundsPercent } from "../types/step";
 import { isFullCrop, normalizeCropRegion } from "../utils/stepCrop";
+import { useI18n } from "../i18n";
 
 const FULL_PERCENT_CROP: PercentCrop = {
   unit: "%",
@@ -61,6 +62,7 @@ export default function CropEditorModal({
   onImageError,
   onImageLoad,
 }: CropEditorModalProps) {
+  const { t } = useI18n();
   const [cropDraft, setCropDraft] = useState<PercentCrop>(() =>
     toPercentCrop(initialCropRegion),
   );
@@ -78,8 +80,8 @@ export default function CropEditorModal({
     <div className="editor-crop-overlay" onClick={onClose}>
       <div className="editor-crop-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="editor-crop-header">
-          <div className="editor-crop-title">Adjust Focus Crop</div>
-          <button className="editor-crop-close" onClick={onClose} title="Close crop editor">
+          <div className="editor-crop-title">{t("step.crop.modal_title")}</div>
+          <button className="editor-crop-close" onClick={onClose} title={t("step.crop.close_title")}>
             ×
           </button>
         </div>
@@ -102,7 +104,7 @@ export default function CropEditorModal({
             <div style={{ position: "relative", lineHeight: 0 }}>
               <img
                 src={screenshotSrc}
-                alt={`Adjust crop for step ${stepIndex + 1}`}
+                alt={t("step.crop.image_alt", { num: stepIndex + 1 })}
                 onError={onImageError}
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
@@ -133,9 +135,9 @@ export default function CropEditorModal({
           </ReactCrop>
         </div>
         <div className="editor-crop-actions">
-          <button className="button ghost" onClick={handleReset}>Reset</button>
-          <button className="button ghost" onClick={onClose}>Cancel</button>
-          <button className="button primary" onClick={handleSave}>Apply</button>
+          <button className="button ghost" onClick={handleReset}>{t("common.reset")}</button>
+          <button className="button ghost" onClick={onClose}>{t("common.cancel")}</button>
+          <button className="button primary" onClick={handleSave}>{t("common.apply")}</button>
         </div>
       </div>
     </div>

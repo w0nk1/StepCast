@@ -5,6 +5,7 @@ import { emit } from "@tauri-apps/api/event";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { isSupportedAppLanguage, useI18n } from "../i18n";
 
 type Theme = "light" | "dark" | "system";
 type UpdateStatus = "idle" | "checking" | "available" | "installing" | "up-to-date" | "error";
@@ -14,11 +15,7 @@ interface SettingsSheetProps {
   onBack: () => void;
 }
 
-const THEME_OPTIONS: { value: Theme; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-];
+const THEME_OPTIONS: Theme[] = ["light", "dark", "system"];
 
 const APPLE_INTELLIGENCE_SETTINGS_URL = "x-apple.systempreferences:com.apple.Siri-Settings.extension";
 const SIRI_SETTINGS_FALLBACK_URL = "x-apple.systempreferences:com.apple.preference.siri";
@@ -66,6 +63,7 @@ export function initTheme() {
 }
 
 export default function SettingsSheet({ onBack }: SettingsSheetProps) {
+  const { appLanguage, availableLocales, setAppLanguage, getLanguageLabel, t } = useI18n();
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem("theme") as Theme) || "system"
   );
@@ -87,16 +85,20 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
   }, [aiEnabled]);
 
   useEffect(() => {
+    emit("language-changed", { language: appLanguage }).catch(() => {});
+  }, [appLanguage]);
+
+  useEffect(() => {
     invoke<AiEligibility | null>("get_apple_intelligence_eligibility")
       .then((result) => {
         if (result && typeof result.eligible === "boolean" && typeof result.reason === "string") {
           setAiEligibility(result);
         } else {
-          setAiEligibility({ eligible: false, reason: "Could not check system eligibility." });
+          setAiEligibility({ eligible: false, reason: t("settings.ai.eligibility.fallback") });
         }
       })
-      .catch(() => setAiEligibility({ eligible: false, reason: "Could not check system eligibility." }));
-  }, []);
+      .catch(() => setAiEligibility({ eligible: false, reason: t("settings.ai.eligibility.fallback") }));
+  }, [t]);
 
   const selectTheme = useCallback((t: Theme) => {
     setTheme(t);
@@ -155,26 +157,50 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
     <>
       {/* Header with back button */}
       <header className="panel-header">
-        <button className="settings-back" onClick={onBack} title="Back">
+        <button className="settings-back" onClick={onBack} title={t("settings.back_title")}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
-          <span>Settings</span>
+          <span>{t("settings.title")}</span>
         </button>
       </header>
+
+      {/* Language */}
+      <section className="panel-card">
+        <div className="settings-section">
+          <div className="settings-label">{t("settings.language.label")}</div>
+          <select
+            className="settings-select"
+            value={appLanguage}
+            aria-label={t("settings.language.label")}
+            onChange={(event) => {
+              const nextLanguage = event.target.value;
+              if (!isSupportedAppLanguage(nextLanguage)) return;
+              setAppLanguage(nextLanguage);
+            }}
+          >
+            <option value="system">{getLanguageLabel("system")}</option>
+            {availableLocales.map((locale) => (
+              <option key={locale} value={locale}>
+                {getLanguageLabel(locale)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </section>
 
       {/* Appearance */}
       <section className="panel-card">
         <div className="settings-section">
-          <div className="settings-label">Appearance</div>
+          <div className="settings-label">{t("settings.appearance.label")}</div>
           <div className="segmented-control">
             {THEME_OPTIONS.map((opt) => (
               <button
-                key={opt.value}
-                className={`segmented-option${theme === opt.value ? " active" : ""}`}
-                onClick={() => selectTheme(opt.value)}
+                key={opt}
+                className={`segmented-option${theme === opt ? " active" : ""}`}
+                onClick={() => selectTheme(opt)}
               >
-                {opt.label}
+                {t(`settings.theme.${opt}`)}
               </button>
             ))}
           </div>
@@ -184,13 +210,13 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
       {/* Updates */}
       <section className="panel-card">
         <div className="settings-section">
-          <div className="settings-label">Updates</div>
+          <div className="settings-label">{t("settings.updates.label")}</div>
           <div className="settings-row">
-            <span className="muted">Version {appVersion}</span>
+            <span className="muted">{t("settings.version", { version: appVersion })}</span>
           </div>
           {updateStatus === "available" && updateVersion ? (
             <button className="button primary" onClick={handleInstallUpdate}>
-              Install v{updateVersion}
+              {t("settings.updates.install_version", { version: updateVersion })}
             </button>
           ) : (
             <button
@@ -198,14 +224,18 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
               onClick={handleCheckUpdate}
               disabled={updateStatus === "checking" || updateStatus === "installing"}
             >
-              {updateStatus === "checking" ? "Checking..." : updateStatus === "installing" ? "Installing..." : "Check for Updates"}
+              {updateStatus === "checking"
+                ? t("settings.updates.checking")
+                : updateStatus === "installing"
+                  ? t("settings.updates.installing")
+                  : t("settings.updates.check")}
             </button>
           )}
           {updateStatus === "up-to-date" && (
-            <span className="settings-status success">You're up to date</span>
+            <span className="settings-status success">{t("settings.updates.up_to_date")}</span>
           )}
           {updateStatus === "error" && (
-            <span className="settings-status error">Could not check for updates</span>
+            <span className="settings-status error">{t("settings.updates.error")}</span>
           )}
         </div>
       </section>
@@ -243,7 +273,7 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
                 d="M18.5 14l1.05 3.2 3.2 1.05-3.2 1.05-1.05 3.2-1.05-3.2-3.2-1.05 3.2-1.05L18.5 14z"
               />
             </svg>
-            Apple Intelligence
+            {t("settings.ai.title")}
           </div>
           <div
             className="settings-row settings-row-switch"
@@ -256,25 +286,25 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
                 setAiEnabled((v) => !v);
               }
             }}
-            aria-label="Toggle Apple Intelligence step descriptions"
+            aria-label={t("settings.ai.toggle_row_aria")}
           >
-            <span>Use for step descriptions</span>
+            <span>{t("settings.ai.use_for_steps")}</span>
             <AppleToggle
               checked={aiEnabled}
               onChange={setAiEnabled}
-              aria-label="Apple Intelligence step descriptions"
+              aria-label={t("settings.ai.toggle_aria")}
             />
           </div>
           <div className="muted">
             {aiEligibility
               ? aiEligibility.eligible
-                ? "No extra permissions. Requires Apple Intelligence enabled in System Settings. Runs on-device (offline). Step data stays on your Mac."
-                : `${aiEligibility.reason} No extra permissions. StepCast will use built-in descriptions. Step data stays on your Mac.`
-              : "Checking eligibility..."}
+                ? t("settings.ai.eligibility.ok")
+                : t("settings.ai.eligibility.with_reason", { reason: aiEligibility.reason })
+              : t("settings.ai.eligibility.checking")}
           </div>
           {aiEligibility?.details && <div className="muted">{aiEligibility.details}</div>}
           <button className="button ghost" onClick={openAppleIntelligenceSettings}>
-            Open Apple Intelligence &amp; Siri Settings
+            {t("settings.ai.open_settings")}
           </button>
         </div>
       </section>
@@ -282,14 +312,14 @@ export default function SettingsSheet({ onBack }: SettingsSheetProps) {
       {/* About */}
       <section className="panel-card">
         <div className="settings-section">
-          <div className="settings-label">About</div>
+          <div className="settings-label">{t("settings.about.label")}</div>
           <div className="settings-links">
             <button className="settings-link" onClick={() => openUrl("https://github.com/w0nk1/StepCast")}>
-              GitHub
+              {t("settings.about.github")}
             </button>
             <span className="settings-link-sep" />
             <button className="settings-link" onClick={() => openUrl("https://github.com/w0nk1/StepCast/issues")}>
-              Report a Bug
+              {t("settings.about.report_bug")}
             </button>
           </div>
         </div>

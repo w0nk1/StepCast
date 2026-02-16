@@ -373,6 +373,7 @@ describe("RecorderPanel", () => {
         title: "New StepCast Guide",
         format: "pdf",
         outputPath: "/tmp/guide.pdf",
+        appLanguage: "en",
       });
     });
 

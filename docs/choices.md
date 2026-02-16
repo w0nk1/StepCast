@@ -242,3 +242,29 @@
 
 2026-02-15 (release-provenance-clean-cut)
 - Default: cut `v0.3.1` from latest `main` instead of publishing `v0.3.0` draft produced via workflow_dispatch commit mismatch; reason: keep tag, source, and artifacts strictly aligned.
+
+2026-02-16 (multilanguage-mvp-kickoff)
+- Default: execute multilingual support in phased rollout; Phase 1 = frontend i18n infrastructure + language selector + key UI migration, Phase 2 = export/tray/backend strings, Phase 3 = Swift Apple-Intelligence prompt/baseline localization; reason: deliver contributor-ready value quickly without risky cross-stack big-bang.
+- Default: keep English as canonical source locale (`en`) and require all additional locales to mirror key structure; reason: deterministic fallback + safe contributor workflow.
+- Default: do not block on branch/worktree setup in this run; reason: user explicitly requested immediate brainstorming -> plan -> execution in current session.
+- Default: keep i18n runtime lightweight and in-repo (`src/i18n`) instead of adding external i18n dependency in MVP; reason: lower migration risk and simpler contributor onboarding while preserving key-based catalogs.
+- Default: use `appLanguage` (`system|en|de`) persisted in localStorage and synchronized across webviews via Tauri `language-changed` event; reason: mirrors existing `ai-toggle-changed` reliability pattern in Tauri multi-webview setups.
+- Default: migrate high-frequency frontend surfaces first (panel/settings/editor/export) and keep Rust export/tray + Swift AI localization as planned follow-up phases; reason: fast user-visible impact with controlled scope.
+
+2026-02-16 (multilanguage-phase2-backend)
+- Default: export command receives resolved locale (`en|de`) from frontend even when UI setting is `system`; reason: avoid macOS GUI env-var locale gaps and keep export language consistent with visible UI language.
+- Default: backend system locale detection now checks macOS `AppleLocale` (`defaults read -g AppleLocale`) with env fallback and one-time caching; reason: tray localization should remain correct in packaged app launches where `LANG` is often unset.
+- Default: keep tray language derived from system locale (not app setting) for now; reason: Phase 2 scope targets startup/system consistency and avoids runtime tray relabel complexity.
+- Default: auth placeholder export text is localized only when step description is empty or matches known default placeholder texts; reason: preserve user-authored/custom descriptions.
+
+2026-02-16 (multilanguage-phase3-apple-intelligence)
+- Default: `generate_step_descriptions` receives `appLanguage` from frontend and forwards it to the Swift helper request as `app_language`; reason: AI output language must follow in-app language selection, not only system locale.
+- Default: keep AI heuristics/classification on canonical internal verbs/kinds and localize only rendered baseline/prompt/verb checks; reason: reduce regression risk in existing quality-gate logic while adding localized output.
+- Default: localize helper `availability` details via optional `--lang` argument (system locale from Rust caller); reason: keep fallback/error text language-consistent when model/framework is unavailable.
+- Default: add listener cleanup hardening (`cancelled` pattern) for editor `language-changed` event; reason: avoid stale unlisten handles in async listener registration races.
+- Default: stopped-state action bar uses fixed 3-column grid with `minmax(0, 1fr)` and label ellipsis; reason: prevent localized button labels from forcing horizontal overflow.
+
+2026-02-16 (multilanguage-phase4-dynamic-locale-selector)
+- Default: language selection UI uses a dropdown (`<select>`) instead of segmented pills; reason: scales for many locales and avoids crowded/overflowing controls as translators add languages.
+- Default: language options are sourced from dynamically discovered locale catalogs (`availableLocales`) plus `system`; reason: contributor flow should be "add locale file only" with no UI code edits.
+- Default: cross-webview `language-changed` handling validates locale via `isSupportedAppLanguage` instead of hardcoded `en/de`; reason: runtime should automatically accept newly added locale files.

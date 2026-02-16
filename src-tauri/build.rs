@@ -142,7 +142,9 @@ fn build_swift_ai_helper() {
                 .arg("runtime")
                 .arg(&resource_dst)
                 .status()
-                .unwrap_or_else(|e| panic!("failed to run codesign for {}: {e}", resource_dst.display()));
+                .unwrap_or_else(|e| {
+                    panic!("failed to run codesign for {}: {e}", resource_dst.display())
+                });
 
             if !status.success() {
                 panic!(

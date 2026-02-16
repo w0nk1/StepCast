@@ -1,25 +1,43 @@
 use super::helpers::{
-    effective_description, html_escape, load_screenshot_optimized, marker_position_percent,
-    ImageTarget,
+    effective_description_localized, html_escape, load_screenshot_optimized,
+    marker_position_percent, ImageTarget,
 };
+use crate::i18n::Locale;
 use crate::recorder::types::{ActionType, Step};
 
 /// Generate a self-contained HTML document from steps.
+#[allow(dead_code)]
 pub fn generate(title: &str, steps: &[Step]) -> String {
-    generate_for(title, steps, ImageTarget::Web)
+    generate_localized(title, steps, Locale::En)
+}
+
+/// Generate a self-contained localized HTML document from steps.
+pub fn generate_localized(title: &str, steps: &[Step], locale: Locale) -> String {
+    generate_for_locale(title, steps, ImageTarget::Web, locale)
 }
 
 /// Generate HTML with a specific image target (Web = WebP, Pdf = JPEG).
+#[allow(dead_code)]
 pub fn generate_for(title: &str, steps: &[Step], target: ImageTarget) -> String {
+    generate_for_locale(title, steps, target, Locale::En)
+}
+
+/// Generate localized HTML with a specific image target (Web = WebP, Pdf = JPEG).
+pub fn generate_for_locale(
+    title: &str,
+    steps: &[Step],
+    target: ImageTarget,
+    locale: Locale,
+) -> String {
     let steps_html: String = steps
         .iter()
         .enumerate()
-        .map(|(i, step)| render_step(i + 1, step, target))
+        .map(|(i, step)| render_step(i + 1, step, target, locale))
         .collect();
 
     format!(
         r#"<!doctype html>
-<html lang="en">
+<html lang="{html_lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,29 +49,32 @@ pub fn generate_for(title: &str, steps: &[Step], target: ImageTarget) -> String 
 <body>
 <div class="container">
 <h1>{title_esc}</h1>
-<p class="subtitle">{count} step{plural}</p>
+<p class="subtitle">{step_count}</p>
 <div class="timeline">
 {steps_html}
 </div>
 </div>
 </body>
 </html>"#,
+        html_lang = locale.as_html_lang(),
         title_esc = html_escape(title),
         css = CSS,
-        count = steps.len(),
-        plural = if steps.len() == 1 { "" } else { "s" },
+        step_count = crate::i18n::export_step_count(locale, steps.len()),
         steps_html = steps_html,
     )
 }
 
-fn render_step(num: usize, step: &Step, target: ImageTarget) -> String {
-    let desc = html_escape(&effective_description(step));
+fn render_step(num: usize, step: &Step, target: ImageTarget, locale: Locale) -> String {
+    let desc = html_escape(&effective_description_localized(step, locale));
 
     let image_html = step
         .screenshot_path
         .as_ref()
         .and_then(|p| load_screenshot_optimized(p, target, step.crop_region.as_ref()))
-        .map(|(b64, mime)| format!(r#"<img src="data:{mime};base64,{b64}" alt="Step {num}">"#))
+        .map(|(b64, mime)| {
+            let alt = crate::i18n::export_step_image_alt(locale, num);
+            format!(r#"<img src="data:{mime};base64,{b64}" alt="{alt}">"#)
+        })
         .unwrap_or_default();
 
     let marker_class = match step.action {
@@ -180,6 +201,14 @@ mod tests {
     fn generate_contains_step_count() {
         let html = generate("G", &[sample_step(), sample_step()]);
         assert!(html.contains("2 steps"));
+    }
+
+    #[test]
+    fn generate_localized_german_text() {
+        let html = generate_localized("Anleitung", &[sample_step()], crate::i18n::Locale::De);
+        assert!(html.contains(r#"<html lang="de">"#));
+        assert!(html.contains("1 Schritt"));
+        assert!(html.contains("Geklickt in Finder"));
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use crate::i18n::Locale;
 use crate::recorder::types::{ActionType, BoundsPercent, Step};
 use base64::Engine;
 use std::fs;
@@ -103,19 +104,25 @@ pub fn marker_position_percent(step: &Step) -> Option<(f32, f32)> {
 }
 
 /// Human-readable description of what happened in a step
+#[allow(dead_code)]
 pub fn action_description(step: &Step) -> String {
+    action_description_localized(step, Locale::En)
+}
+
+/// Localized human-readable description of what happened in a step.
+pub fn action_description_localized(step: &Step, locale: Locale) -> String {
     if is_auth_placeholder(step) {
-        return "Authenticate with Touch ID or enter your password to continue.".to_string();
+        return crate::i18n::auth_placeholder_description(locale).to_string();
     }
 
     match step.action {
-        ActionType::Note => "Note".to_string(),
+        ActionType::Note => crate::i18n::step_action_note(locale).to_string(),
         _ => {
             let verb = match step.action {
-                ActionType::DoubleClick => "Double-clicked in",
-                ActionType::RightClick => "Right-clicked in",
-                ActionType::Shortcut => "Used keyboard shortcut in",
-                _ => "Clicked in",
+                ActionType::DoubleClick => crate::i18n::step_action_double_clicked_in(locale),
+                ActionType::RightClick => crate::i18n::step_action_right_clicked_in(locale),
+                ActionType::Shortcut => crate::i18n::step_action_shortcut_in(locale),
+                _ => crate::i18n::step_action_clicked_in(locale),
             };
             format!("{} {} \u{2014} \"{}\"", verb, step.app, step.window_title)
         }
@@ -123,12 +130,27 @@ pub fn action_description(step: &Step) -> String {
 }
 
 /// Prefer enhanced description if present, otherwise fall back to `action_description`.
+#[allow(dead_code)]
 pub fn effective_description(step: &Step) -> String {
+    effective_description_localized(step, Locale::En)
+}
+
+/// Prefer enhanced description if present, otherwise use localized baseline text.
+pub fn effective_description_localized(step: &Step, locale: Locale) -> String {
     let desc = step.description.as_deref().unwrap_or("").trim();
+    if is_auth_placeholder(step) && (desc.is_empty() || is_auth_placeholder_description(desc)) {
+        return action_description_localized(step, locale);
+    }
     if !desc.is_empty() {
         return desc.to_string();
     }
-    action_description(step)
+    action_description_localized(step, locale)
+}
+
+fn is_auth_placeholder_description(desc: &str) -> bool {
+    let normalized = desc.trim();
+    normalized == crate::i18n::auth_placeholder_description(Locale::En)
+        || normalized == crate::i18n::auth_placeholder_description(Locale::De)
 }
 
 /// Image data with format metadata for export.
@@ -352,6 +374,18 @@ mod tests {
         let mut s = sample_step();
         s.description = Some("   ".into());
         assert!(effective_description(&s).contains("Clicked in Finder"));
+    }
+
+    #[test]
+    fn effective_description_localizes_auth_placeholder_defaults() {
+        let mut s = sample_step();
+        s.app = "Authentication".into();
+        s.description =
+            Some("Authenticate with Touch ID or enter your password to continue.".into());
+        assert_eq!(
+            effective_description_localized(&s, crate::i18n::Locale::De),
+            "Authentifiziere dich mit Touch ID oder gib dein Passwort ein, um fortzufahren."
+        );
     }
 
     #[test]

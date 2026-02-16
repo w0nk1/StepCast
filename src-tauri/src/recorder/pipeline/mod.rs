@@ -1657,7 +1657,9 @@ pub fn process_click(
             // user actually saw at click-time.
             debug_log(
                 session,
-                &format!("transient_region_capture: role={ax_role:?} overlay_kind={overlay_kind:?}"),
+                &format!(
+                    "transient_region_capture: role={ax_role:?} overlay_kind={overlay_kind:?}"
+                ),
             );
             let bounds = if overlay_kind == helpers::TitlelessOverlayKind::NotOverlay {
                 // Keep OCR/context focused around click for weak AX roles (e.g. AXGroup),

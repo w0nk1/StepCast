@@ -7,6 +7,7 @@ import EditorStepCard from "./EditorStepCard";
 import UndoToast from "./UndoToast";
 import type { BoundsPercent, Step } from "../types/step";
 import { mergeUpdatedStep } from "../utils/stepEvents";
+import { isSupportedAppLanguage, type AppLanguage, useI18n } from "../i18n";
 
 type PendingDelete = { step: Step; index: number; timerId: ReturnType<typeof setTimeout> };
 
@@ -18,6 +19,7 @@ function isAuthPlaceholder(step: Step) {
 }
 
 export default function EditorWindow() {
+  const { appLanguage, locale, setAppLanguage, t } = useI18n();
   const [steps, setSteps] = useState<Step[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
@@ -67,6 +69,29 @@ export default function EditorWindow() {
       if (unlisten) unlisten();
     };
   }, []);
+
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+    let cancelled = false;
+    listen<{ language?: AppLanguage }>("language-changed", (event) => {
+      const language = event.payload?.language;
+      if (language && isSupportedAppLanguage(language)) {
+        setAppLanguage(language);
+      }
+    })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [setAppLanguage]);
 
   // Listen for step-captured, step-updated, steps-discarded events
   useEffect(() => {
@@ -208,9 +233,10 @@ export default function EditorWindow() {
   const handleGenerateDescription = useCallback(
     (stepId: string) => {
       if (!aiEnabled) return;
-      invoke("generate_step_descriptions", { stepIds: [stepId] }).catch(() => {});
+      const aiLanguage = appLanguage === "system" ? locale : appLanguage;
+      invoke("generate_step_descriptions", { stepIds: [stepId], appLanguage: aiLanguage }).catch(() => {});
     },
-    [aiEnabled],
+    [aiEnabled, appLanguage, locale],
   );
 
   const handleToggleCollapse = useCallback((stepId: string) => {
@@ -266,11 +292,12 @@ export default function EditorWindow() {
 
   const handleBulkGenerate = useCallback(() => {
     if (!aiEnabled) return;
+    const aiLanguage = appLanguage === "system" ? locale : appLanguage;
     const ids = steps.filter((s) => selection.has(s.id)).map((s) => s.id);
     if (ids.length > 0) {
-      invoke("generate_step_descriptions", { stepIds: ids }).catch(() => {});
+      invoke("generate_step_descriptions", { stepIds: ids, appLanguage: aiLanguage }).catch(() => {});
     }
-  }, [aiEnabled, steps, selection]);
+  }, [aiEnabled, appLanguage, locale, selection, steps]);
 
   // Prune stale selection IDs when steps change
   useEffect(() => {
@@ -326,6 +353,7 @@ export default function EditorWindow() {
 
   const handleEnhanceAll = useCallback(() => {
     if (!aiEnabled) return;
+    const aiLanguage = appLanguage === "system" ? locale : appLanguage;
 
     const missing = steps.filter(
       (s) =>
@@ -335,8 +363,8 @@ export default function EditorWindow() {
         s.description_source !== "manual",
     );
     const mode = missing.length > 0 ? "missing_only" : "all";
-    invoke("generate_step_descriptions", { mode }).catch(() => {});
-  }, [aiEnabled, steps]);
+    invoke("generate_step_descriptions", { mode, appLanguage: aiLanguage }).catch(() => {});
+  }, [aiEnabled, appLanguage, locale, steps]);
 
   const isAnyGenerating = useMemo(
     () => steps.some((s) => s.description_status === "generating"),
@@ -349,34 +377,34 @@ export default function EditorWindow() {
     <div className="editor-body">
       <header className="editor-toolbar">
         <div className="editor-toolbar-left">
-          <div className="editor-toolbar-title">Edit Steps</div>
+          <div className="editor-toolbar-title">{t("editor.title")}</div>
           <div className="editor-toolbar-subtitle">
-            {steps.length} step{steps.length === 1 ? "" : "s"}
+            {t("editor.subtitle_steps", { count: steps.length })}
           </div>
         </div>
         <div className="editor-toolbar-right">
           {selection.size > 0 ? (
             <>
               <span className="editor-toolbar-selection-count">
-                {selection.size} selected
+                {t("editor.selection_count", { count: selection.size })}
               </span>
               <button
                 className="button ghost"
                 onClick={handleBulkGenerate}
                 disabled={!aiEnabled || isAnyGenerating}
-                title="Enhance selected steps with AI"
+                title={t("editor.enhance_default_title")}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                   <path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5L10 2z" />
                   <path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" />
                 </svg>
-                Enhance
+                {t("editor.enhance_selected")}
               </button>
-              <button className="button ghost" onClick={handleBulkDelete} title="Delete selected steps">
-                Delete
+              <button className="button ghost" onClick={handleBulkDelete} title={t("editor.delete_selected")}>
+                {t("editor.delete_selected")}
               </button>
-              <button className="button ghost" onClick={handleDeselectAll} title="Deselect all">
-                Deselect
+              <button className="button ghost" onClick={handleDeselectAll} title={t("editor.deselect_all")}>
+                {t("editor.deselect_all")}
               </button>
             </>
           ) : (
@@ -384,16 +412,16 @@ export default function EditorWindow() {
               {isAnyGenerating && (
                 <span className="editor-toolbar-generating">
                   <span className="editor-toolbar-spinner" />
-                  Generating…
+                  {t("editor.generating")}
                 </span>
               )}
               {steps.length > 5 && (
                 <button
                   className="button ghost"
                   onClick={collapsedIds.size > 0 ? handleExpandAll : handleCollapseAll}
-                  title={collapsedIds.size > 0 ? "Expand all steps" : "Collapse all steps"}
+                  title={collapsedIds.size > 0 ? t("editor.expand_all_title") : t("editor.collapse_all_title")}
                 >
-                  {collapsedIds.size > 0 ? "Expand All" : "Collapse All"}
+                  {collapsedIds.size > 0 ? t("editor.expand_all") : t("editor.collapse_all")}
                 </button>
               )}
               <button
@@ -402,17 +430,17 @@ export default function EditorWindow() {
                 disabled={!aiEnabled || steps.length === 0 || isAnyGenerating}
                 title={
                   !aiEnabled
-                    ? "Enable Apple Intelligence descriptions in StepCast Settings"
+                    ? t("editor.enhance_disabled_title")
                     : isAnyGenerating
-                      ? "AI generation in progress…"
-                      : "Generate concise descriptions for steps"
+                      ? t("editor.enhance_generating_title")
+                      : t("editor.enhance_default_title")
                 }
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                   <path d="M10 2l1.5 4.5L16 8l-4.5 1.5L10 14l-1.5-4.5L4 8l4.5-1.5L10 2z" />
                   <path d="M18 12l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" />
                 </svg>
-                Enhance Steps
+                {t("editor.enhance_steps")}
               </button>
             </>
           )}
@@ -420,7 +448,7 @@ export default function EditorWindow() {
       </header>
       <div className="editor-scroll" ref={scrollRef} tabIndex={0} onKeyDown={handleScrollKeyDown}>
         {steps.length === 0 ? (
-          <div className="editor-empty">No steps recorded yet</div>
+          <div className="editor-empty">{t("editor.empty")}</div>
         ) : (
           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
@@ -451,7 +479,7 @@ export default function EditorWindow() {
       </div>
       {pendingDelete && (
         <UndoToast
-          message="Step deleted"
+          message={t("editor.undo.step_deleted")}
           onUndo={handleUndoDelete}
           onDismiss={handleDismissUndo}
         />

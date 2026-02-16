@@ -3,6 +3,7 @@ pub mod html;
 pub mod markdown;
 pub mod pdf;
 
+use crate::i18n::Locale;
 use crate::recorder::types::Step;
 use std::path::Path;
 
@@ -126,6 +127,7 @@ pub fn export(
     format: ExportFormat,
     output_path: &str,
     app: &tauri::AppHandle,
+    locale: Locale,
 ) -> Result<(), String> {
     // Pre-validate before expensive work (~500KB per step estimate)
     let estimated_bytes = (steps.len() as u64) * 500_000 + 100_000;
@@ -133,11 +135,11 @@ pub fn export(
 
     match format {
         ExportFormat::Html => {
-            let content = html::generate(title, steps);
+            let content = html::generate_localized(title, steps, locale);
             std::fs::write(output_path, content).map_err(|e| friendly_write_error(&e, output_path))
         }
-        ExportFormat::Markdown => markdown::write(title, steps, output_path),
-        ExportFormat::Pdf => pdf::write(title, steps, output_path, app),
+        ExportFormat::Markdown => markdown::write_localized(title, steps, output_path, locale),
+        ExportFormat::Pdf => pdf::write(title, steps, output_path, app, locale),
     }
 }
 

@@ -13,7 +13,16 @@ Thanks for your interest in contributing!
 
 - One feature or fix per PR
 - `cargo clippy -- -D warnings` and `npm run build` should pass
+- `npm run i18n:check` should pass for locale changes
 - Use [conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`)
+
+## Translations
+
+- Source locale is `src/i18n/locales/en.json`
+- Add/update translated keys in `src/i18n/locales/<locale>.json`
+- New locale files are auto-discovered in-app (including Settings language dropdown); no code changes needed
+- Keep placeholders aligned with English (`{count}`, `{name}`, plural vars)
+- Validate with `npm run i18n:check`
 
 ## Issues
 

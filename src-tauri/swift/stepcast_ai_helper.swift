@@ -52,6 +52,7 @@ struct StepInput: Codable {
 struct GenerateRequest: Codable {
   let steps: [StepInput]
   let maxChars: Int?
+  let appLanguage: String?
 }
 
 struct GenerateResultItem: Codable {
@@ -80,6 +81,32 @@ struct GenerateResponse: Codable {
   let failures: [GenerateFailureItem]
 }
 
+enum HelperLocale: String {
+  case en
+  case de
+
+  static func fromAppLanguage(_ raw: String?) -> HelperLocale {
+    let normalized = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if normalized.hasPrefix("de") { return .de }
+    return .en
+  }
+}
+
+var activeLocale: HelperLocale = .en
+
+@inline(__always)
+func isGermanLocale() -> Bool { activeLocale == .de }
+
+@inline(__always)
+func l(_ english: String, _ german: String) -> String {
+  isGermanLocale() ? german : english
+}
+
+func languageArg(from args: [String]) -> String? {
+  guard let idx = args.firstIndex(of: "--lang"), idx + 1 < args.count else { return nil }
+  return args[idx + 1]
+}
+
 func encodeJSON<T: Encodable>(_ value: T) -> Data {
   let encoder = JSONEncoder()
   encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -100,7 +127,10 @@ func unsupportedModelAvailability() -> AvailabilityResponse {
   AvailabilityResponse(
     available: false,
     reason: "unsupported",
-    details: "Apple Intelligence framework is not available on this system."
+    details: l(
+      "Apple Intelligence framework is not available on this system.",
+      "Apple-Intelligence-Framework ist auf diesem System nicht verfügbar."
+    )
   )
 }
 
@@ -121,13 +151,22 @@ func availabilityReasonCode(_ reason: SystemLanguageModel.Availability.Unavailab
 func availabilityReasonDetails(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
   switch reason {
   case .deviceNotEligible:
-    return "This device is not eligible for Apple Intelligence."
+    return l(
+      "This device is not eligible for Apple Intelligence.",
+      "Dieses Gerät ist nicht für Apple Intelligence geeignet."
+    )
   case .appleIntelligenceNotEnabled:
-    return "Apple Intelligence is disabled. Enable it in System Settings."
+    return l(
+      "Apple Intelligence is disabled. Enable it in System Settings.",
+      "Apple Intelligence ist deaktiviert. Aktiviere es in den Systemeinstellungen."
+    )
   case .modelNotReady:
-    return "The model is not ready yet. Try again in a moment."
+    return l(
+      "The model is not ready yet. Try again in a moment.",
+      "Das Modell ist noch nicht bereit. Bitte versuche es gleich erneut."
+    )
   @unknown default:
-    return "Apple Intelligence is unavailable."
+    return l("Apple Intelligence is unavailable.", "Apple Intelligence ist nicht verfügbar.")
   }
 }
 
@@ -150,18 +189,26 @@ func checkAvailability() -> AvailabilityResponse {
 #endif
 
 func generateDescriptions(_ req: GenerateRequest) async -> GenerateResponse {
+  activeLocale = HelperLocale.fromAppLanguage(req.appLanguage)
   let maxChars = max(20, min(req.maxChars ?? 110, 140))
   let availability = checkAvailability()
   if !availability.available {
     let failures = req.steps.map {
-      GenerateFailureItem(id: $0.id, error: availability.details ?? "Apple Intelligence unavailable.")
+      GenerateFailureItem(
+        id: $0.id,
+        error: availability.details ?? l(
+          "Apple Intelligence unavailable.",
+          "Apple Intelligence ist nicht verfügbar."
+        )
+      )
     }
     return GenerateResponse(results: [], failures: failures)
   }
 
-  let instructions =
-    "You generate concise UI tutorial step descriptions. " +
-    "Keep output short and specific. Never invent UI labels; use only provided context."
+  let instructions = l(
+    "You generate concise UI tutorial step descriptions. Keep output short and specific. Never invent UI labels; use only provided context.",
+    "Du erzeugst prägnante Schrittbeschreibungen für UI-Tutorials. Halte die Ausgabe kurz und konkret. Erfinde keine UI-Labels; nutze nur bereitgestellten Kontext."
+  )
 
   var results: [GenerateResultItem] = []
   let failures: [GenerateFailureItem] = []
@@ -282,13 +329,17 @@ struct StepCastAIHelper {
 
     switch cmd {
     case "availability":
+      activeLocale = HelperLocale.fromAppLanguage(languageArg(from: args))
       writeStdout(encodeJSON(checkAvailability()))
     case "generate":
       let input = readStdin()
       let decoder = JSONDecoder()
       decoder.keyDecodingStrategy = .convertFromSnakeCase
       guard let req = try? decoder.decode(GenerateRequest.self, from: input) else {
-        let resp = GenerateResponse(results: [], failures: [GenerateFailureItem(id: "*", error: "Invalid JSON input.")])
+        let resp = GenerateResponse(
+          results: [],
+          failures: [GenerateFailureItem(id: "*", error: l("Invalid JSON input.", "Ungültige JSON-Eingabe."))]
+        )
         writeStdout(encodeJSON(resp))
         exit(2)
       }

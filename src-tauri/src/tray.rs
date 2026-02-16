@@ -170,7 +170,8 @@ pub fn set_recording_icon(app_handle: &AppHandle) -> tauri::Result<()> {
 
     tray.set_icon(Some(icon))?;
     tray.set_icon_as_template(false)?; // Keep red color, don't adapt to system theme
-    tray.set_tooltip(Some("StepCast - Recording..."))?;
+    let locale = crate::i18n::system_locale();
+    tray.set_tooltip(Some(crate::i18n::tray_recording_tooltip(locale)))?;
     Ok(())
 }
 
@@ -191,7 +192,8 @@ pub fn set_default_icon(app_handle: &AppHandle) -> tauri::Result<()> {
 
     tray.set_icon(Some(icon))?;
     tray.set_icon_as_template(true)?; // Adapt to system theme
-    tray.set_tooltip(Some("StepCast"))?;
+    let locale = crate::i18n::system_locale();
+    tray.set_tooltip(Some(crate::i18n::tray_tooltip(locale)))?;
     Ok(())
 }
 
@@ -231,12 +233,30 @@ fn resolve_tray_icon_path(app_handle: &AppHandle) -> tauri::Result<PathBuf> {
 pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let tray_icon_path = resolve_tray_icon_path(app_handle)?;
     let icon = Image::from_path(tray_icon_path)?;
+    let locale = crate::i18n::system_locale();
 
-    let open = MenuItem::with_id(app_handle, "open", "Open StepCast", true, None::<&str>)?;
-    let quick_start =
-        MenuItem::with_id(app_handle, "quick_start", "Quick Start", true, None::<&str>)?;
+    let open = MenuItem::with_id(
+        app_handle,
+        "open",
+        crate::i18n::tray_menu_open(locale),
+        true,
+        None::<&str>,
+    )?;
+    let quick_start = MenuItem::with_id(
+        app_handle,
+        "quick_start",
+        crate::i18n::tray_menu_quick_start(locale),
+        true,
+        None::<&str>,
+    )?;
     let sep = PredefinedMenuItem::separator(app_handle)?;
-    let quit = MenuItem::with_id(app_handle, "quit", "Quit StepCast", true, None::<&str>)?;
+    let quit = MenuItem::with_id(
+        app_handle,
+        "quit",
+        crate::i18n::tray_menu_quit(locale),
+        true,
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(app_handle, &[&open, &quick_start, &sep, &quit])?;
 
     TrayIconBuilder::with_id(TRAY_ID)
@@ -256,7 +276,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                 _ => {}
             }
         })
-        .tooltip("StepCast")
+        .tooltip(crate::i18n::tray_tooltip(locale))
         .on_tray_icon_event(|tray, event| {
             let app_handle = tray.app_handle();
 

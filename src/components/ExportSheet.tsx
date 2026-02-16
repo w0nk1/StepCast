@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "../i18n";
 
 type ExportFormat = "html" | "md" | "pdf";
 
@@ -9,13 +10,10 @@ interface ExportSheetProps {
   onClose: () => void;
 }
 
-const FORMAT_OPTIONS: { value: ExportFormat; label: string }[] = [
-  { value: "html", label: "HTML" },
-  { value: "md", label: "MD" },
-  { value: "pdf", label: "PDF" },
-];
+const FORMAT_OPTIONS: ExportFormat[] = ["html", "md", "pdf"];
 
 export default function ExportSheet({ stepCount, exporting, onExport, onClose }: ExportSheetProps) {
+  const { t } = useI18n();
   const [title, setTitle] = useState("New StepCast Guide");
   const [format, setFormat] = useState<ExportFormat>(
     () => (localStorage.getItem("exportFormat") as ExportFormat) || "pdf"
@@ -31,48 +29,48 @@ export default function ExportSheet({ stepCount, exporting, onExport, onClose }:
   return (
     <div className="export-overlay" onClick={exporting ? undefined : onClose}>
       <div className="export-sheet" onClick={(e) => e.stopPropagation()}>
-        <h2 className="export-sheet-title">Export Guide</h2>
+        <h2 className="export-sheet-title">{t("export.title")}</h2>
 
         <label className="field">
-          Title
+          {t("export.field.title")}
           <input
             className="title-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Guide title..."
+            placeholder={t("export.placeholder.title")}
             autoFocus
             disabled={exporting}
           />
         </label>
 
         <div className="field">
-          Format
+          {t("export.field.format")}
           <div className="segmented-control">
             {FORMAT_OPTIONS.map((opt) => (
               <button
-                key={opt.value}
-                className={`segmented-option${format === opt.value ? " active" : ""}`}
-                onClick={() => selectFormat(opt.value)}
+                key={opt}
+                className={`segmented-option${format === opt ? " active" : ""}`}
+                onClick={() => selectFormat(opt)}
                 disabled={exporting}
               >
-                {opt.label}
+                {t(`export.format.${opt}`)}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="muted">{stepCount} step{stepCount !== 1 ? "s" : ""}</div>
+        <div className="muted">{t("export.steps_count", { count: stepCount })}</div>
 
         <div className="export-sheet-actions">
           <button className="button" onClick={onClose} disabled={exporting}>
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             className="button primary"
             onClick={() => onExport(title.trim(), format)}
             disabled={!titleValid || exporting}
           >
-            {exporting ? "Exporting..." : "Export"}
+            {exporting ? t("common.exporting") : t("common.export")}
           </button>
         </div>
       </div>

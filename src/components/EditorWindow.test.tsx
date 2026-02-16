@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import EditorWindow from "./EditorWindow";
 import type { Step } from "../types/step";
+import { I18nProvider } from "../i18n";
 
 let capturedDragEnd: ((event: any) => void) | null = null;
 
@@ -55,6 +56,8 @@ describe("EditorWindow", () => {
     mockInvoke.mockReset();
     mockListen.mockReset();
     mockListen.mockResolvedValue(() => {});
+    localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
   });
 
   it("shows empty state when no steps", async () => {
@@ -323,6 +326,7 @@ describe("EditorWindow", () => {
     await user.click(screen.getAllByTitle("Enable Apple Intelligence descriptions in StepCast Settings")[1]);
     expect(mockInvoke).not.toHaveBeenCalledWith("generate_step_descriptions", {
       stepIds: ["step-1"],
+      appLanguage: "en",
     });
 
     act(() => {
@@ -333,8 +337,11 @@ describe("EditorWindow", () => {
         }),
       );
     });
-    await user.click(screen.getByTitle("Generate with Apple Intelligence"));
-    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", { stepIds: ["step-1"] });
+    await user.click(screen.getByTitle(/Generate with Apple Intelligence|Mit Apple Intelligence generieren/));
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", {
+      stepIds: ["step-1"],
+      appLanguage: "en",
+    });
   });
 
   it("enhances missing descriptions first, then all when none are missing", async () => {
@@ -353,7 +360,10 @@ describe("EditorWindow", () => {
     });
 
     await user.click(screen.getByRole("button", { name: /Enhance Steps/i }));
-    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", { mode: "missing_only" });
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", {
+      mode: "missing_only",
+      appLanguage: "en",
+    });
 
     act(() => {
       listeners["steps-reordered"]({
@@ -364,7 +374,10 @@ describe("EditorWindow", () => {
       });
     });
     await user.click(screen.getByRole("button", { name: /Enhance Steps/i }));
-    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", { mode: "all" });
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", {
+      mode: "all",
+      appLanguage: "en",
+    });
   });
 
   it("syncs AI toggle from storage and tauri event listeners", async () => {
@@ -598,6 +611,7 @@ describe("EditorWindow", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", {
       stepIds: ["step-1", "step-2"],
+      appLanguage: "en",
     });
   });
 
@@ -990,9 +1004,41 @@ describe("EditorWindow", () => {
       expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByTitle("Generate with Apple Intelligence"));
+    await user.click(
+      screen.getByTitle(/Generate with Apple Intelligence|Mit Apple Intelligence generieren/),
+    );
     expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", {
       stepIds: ["step-1"],
+      appLanguage: "en",
+    });
+  });
+
+  it("uses updated language for AI generation after language-changed event", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("appleIntelligenceDescriptions", "true");
+    const listeners = captureListeners();
+    mockInvoke.mockResolvedValueOnce([makeStep({ id: "step-1" })]);
+    mockInvoke.mockResolvedValue(undefined);
+
+    render(
+      <I18nProvider>
+        <EditorWindow />
+      </I18nProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Clicked in Finder")).toBeInTheDocument();
+    });
+
+    act(() => {
+      listeners["language-changed"]({ payload: { language: "de" } });
+    });
+
+    await user.click(
+      screen.getByTitle(/Generate with Apple Intelligence|Mit Apple Intelligence generieren/),
+    );
+    expect(mockInvoke).toHaveBeenCalledWith("generate_step_descriptions", {
+      stepIds: ["step-1"],
+      appLanguage: "de",
     });
   });
 
