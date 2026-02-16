@@ -54,6 +54,21 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$REVIEW_ID" ]; then
+            REVIEW_ID=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" --paginate --jq '
+              [
+                .[]
+                | select(
+                    .user.login == "chatgpt-codex-connector[bot]"
+                    and .state == "COMMENTED"
+                  )
+              ]
+              | sort_by(.submitted_at // .id)
+              | last
+              | .id // empty
+            ')
+          fi
+
           STATE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
           echo "pr_number=$PR" >> "$GITHUB_OUTPUT"
           echo "review_id=$REVIEW_ID" >> "$GITHUB_OUTPUT"
@@ -107,7 +122,7 @@ jobs:
           PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
           REVIEW_ID: ${{ steps.ctx.outputs.review_id }}
         run: |
-          MARKER="<!-- codex-autofix:pr-${PR_NUMBER}:review-${REVIEW_ID:-latest} -->"
+          MARKER="<!-- codex-autofix:pr-${PR_NUMBER}:review-${REVIEW_ID:-none} -->"
           FOUND=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n 1 || true)
           echo "marker=$MARKER" >> "$GITHUB_OUTPUT"
           if [ -n "$FOUND" ]; then
@@ -125,16 +140,16 @@ jobs:
           SUMMARY: ${{ steps.findings.outputs.summary }}
           COUNT: ${{ steps.findings.outputs.count }}
         run: |
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$(cat <<EOF
-$MARKER
-Codex review findings detected ($COUNT item(s)).
-
-@codex address that feedback
-
-Top findings:
-$SUMMARY
-EOF
-)"
+          {
+            echo "$MARKER"
+            echo "Codex review findings detected ($COUNT item(s))."
+            echo
+            echo "@codex address that feedback"
+            echo
+            echo "Top findings:"
+            echo "$SUMMARY"
+          } > /tmp/codex-feedback-comment.txt
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/codex-feedback-comment.txt
 
       - name: No-op summary
         if: steps.ctx.outputs.pr_state == 'OPEN' && (steps.findings.outputs.count == '0' || steps.dedupe.outputs.already == 'true')

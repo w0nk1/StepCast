@@ -273,3 +273,4 @@
 - Default: codex feedback automation is follow-up-by-comment (`@codex address that feedback`) with dedupe markers, not direct auto-commit from workflow; reason: keeps human oversight and avoids unsafe write automation in CI context.
 - Default: codex follow-up workflow supports three entry points (codex review submit, `/codex-fix` comment, manual dispatch); reason: reliable trigger paths for both automatic and operator-driven remediation.
 - Default: Apple Intelligence eligibility uses selected app language (resolved `en|de`) instead of backend `system_locale`; reason: prevents mixed-language eligibility reasons in localized Settings UI.
+- Default: when manual `/codex-fix` or `workflow_dispatch` omits `review_id`, resolve the latest concrete codex review id before dedupe; reason: avoid static `review-latest` marker collisions and allow later manual reruns for new findings.

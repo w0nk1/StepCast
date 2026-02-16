@@ -379,3 +379,6 @@
 - Added reusable review playbook command `.cursor/commands/pr-review.md` (OpenUsage-style process adapted for StepCast).
 - Added codex follow-up automation workflow `.github/workflows/codex-feedback-loop.yml` (auto on codex review, manual `/codex-fix`, workflow_dispatch) with dedupe marker comments.
 - Updated `CONTRIBUTING.md` with review automation usage and added spec `docs/specs/2026-02-16-codex-feedback-loop.md`.
+2026-02-16
+- Applied codex follow-up fix for workflow dedupe edge case: `.github/workflows/codex-feedback-loop.yml` now resolves latest concrete codex `review_id` when manual triggers (`/codex-fix` or `workflow_dispatch`) omit it.
+- Result: dedupe marker keys by real review id instead of static `review-latest`, so later manual runs are no longer blocked after earlier autofix comments.
