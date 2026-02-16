@@ -278,3 +278,6 @@
 2026-02-16 (codex-review-id-pagination-slurp)
 - Default: paginated codex review lookup uses `gh api --paginate --slurp | jq -r ...` with page flattening before selecting latest review id; reason: `--paginate --jq` without slurp can emit one id per page and corrupt `review_id` step output on long-lived PRs, while `gh` does not allow combining `--slurp` and `--jq`.
 - Default: closed-PR skip log message in workflow uses `PR <number>` (without `#`) in plain-scalar `run:` command; reason: unquoted `#` in YAML plain scalar truncates the command and breaks job execution.
+
+2026-02-16 (recorder-own-app-filter-hardening)
+- Default: own-app click filtering checks resolved capture app names (`actual_app_name` / `capture_window.app_name`) in addition to AX `clicked_info`; reason: menu-bar clicks can be attributed by AX to system hosts and otherwise leak StepCast clicks into recorded steps.

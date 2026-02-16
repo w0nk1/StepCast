@@ -388,3 +388,7 @@
 - Added regression coverage `src/utils/codexFeedbackWorkflow.test.ts` to guard against reintroducing paginated lookup without `--slurp`.
 - Extended regression coverage `src/utils/codexFeedbackWorkflow.test.ts` for YAML-safe closed-PR no-op command.
 - Added focused spec `docs/specs/2026-02-16-codex-feedback-loop-review-id-pagination.md`.
+2026-02-16
+- Investigated recorder session logs under `~/Library/Caches/com.w0nk1.stepcast/sessions/*/recording.log` for own-app leak reports; confirmed edge case where StepCast clicks can bypass the early AX-based filter when AX app attribution is ambiguous.
+- Hardened own-app filtering in `src-tauri/src/recorder/pipeline/mod.rs` by checking resolved capture target app names (`actual_app_name` and `capture_window.app_name`) before step creation.
+- Added unit coverage for StepCast name matching variants in `src-tauri/src/recorder/pipeline/mod.rs` and spec `docs/specs/2026-02-16-recorder-own-app-filter-hardening.md`.

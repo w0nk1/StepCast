@@ -45,6 +45,11 @@ fn app_names_match(left: &str, right: &str) -> bool {
     !left_norm.is_empty() && left_norm == right_norm
 }
 
+fn is_own_app_name(name: &str) -> bool {
+    let normalized = normalize_app_name(name);
+    !normalized.is_empty() && normalized.contains("stepcast")
+}
+
 fn bounds_overlap_ratio(a: &WindowBounds, b: &WindowBounds) -> f32 {
     let a_left = a.x;
     let a_top = a.y;
@@ -282,7 +287,7 @@ pub fn process_click(
     // 0b. Filter clicks on our own app using Accessibility API
     if let Some((clicked_pid, ref clicked_app)) = clicked_info {
         let our_pid = std::process::id() as i32;
-        let is_own_app = clicked_pid == our_pid || clicked_app.to_lowercase().contains("stepcast");
+        let is_own_app = clicked_pid == our_pid || is_own_app_name(clicked_app);
 
         if is_own_app {
             debug_log(
@@ -1082,6 +1087,25 @@ pub fn process_click(
 
     let mut resolved_window_title = actual_window_title.clone();
 
+    // Guard against AX misclassification in menu bar contexts: if resolved capture target
+    // is our app, still drop the click even when clicked_info points at system menu host.
+    let resolved_own_app_click = is_own_app_name(&actual_app_name)
+        || is_own_app_name(&capture_window.app_name)
+        || clicked_info
+            .as_ref()
+            .is_some_and(|(_, clicked_app)| is_own_app_name(clicked_app));
+    if resolved_own_app_click {
+        debug_log(
+            session,
+            &format!(
+                "filtered: own app resolved_app='{}' capture_app='{}'",
+                actual_app_name, capture_window.app_name
+            ),
+        );
+        session.diagnostics.clicks_filtered += 1;
+        return Err(PipelineError::OwnAppClick);
+    }
+
     if cfg!(debug_assertions) {
         eprintln!("Recording click on: {actual_app_name} - {actual_window_title}");
     }
@@ -1121,22 +1145,6 @@ pub fn process_click(
     } else {
         false
     };
-
-    // Filter out clicks on StepCast itself
-    let is_stepcast_click = if let Some((_, ref clicked_app)) = clicked_info {
-        let app_lower = clicked_app.to_lowercase();
-        app_lower.contains("stepcast") || app_lower.contains("step cast")
-    } else {
-        false
-    };
-
-    if is_stepcast_click {
-        if cfg!(debug_assertions) {
-            eprintln!("Filtered click on StepCast app");
-        }
-        session.diagnostics.clicks_filtered += 1;
-        return Err(PipelineError::DebouncedClick);
-    }
 
     // Track capture outcome across all branches
     let mut final_capture_status = CaptureStatus::Ok;
@@ -2252,6 +2260,20 @@ mod tests {
     #[test]
     fn app_name_match_rejects_different_names() {
         assert!(!app_names_match("Finder", "Preview"));
+    }
+
+    #[test]
+    fn own_app_name_matches_stepcast_variants() {
+        assert!(is_own_app_name("StepCast"));
+        assert!(is_own_app_name("step cast"));
+        assert!(is_own_app_name("StepCast Helper"));
+        assert!(is_own_app_name("‎StepCast"));
+    }
+
+    #[test]
+    fn own_app_name_rejects_other_apps() {
+        assert!(!is_own_app_name("ControlCenter"));
+        assert!(!is_own_app_name("Finder"));
     }
 
     // Note: is_click_on_own_app uses the Accessibility API and requires
