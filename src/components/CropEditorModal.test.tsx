@@ -26,6 +26,9 @@ const defaultProps = {
   screenshotSrc: "asset://localhost/tmp/shot.png",
   stepIndex: 0,
   initialCropRegion: null as BoundsPercent | null | undefined,
+  clickXPercent: undefined as number | undefined,
+  clickYPercent: undefined as number | undefined,
+  action: undefined as string | undefined,
   onSave: vi.fn(),
   onReset: vi.fn(),
   onClose: vi.fn(),
@@ -274,7 +277,7 @@ describe("CropEditorModal", () => {
       clickXPercent: 50,
       clickYPercent: 50,
       action: "DoubleClick",
-    } as any);
+    });
     expect(
       container.querySelector(".click-indicator.double-click"),
     ).toBeInTheDocument();
@@ -285,7 +288,7 @@ describe("CropEditorModal", () => {
       clickXPercent: 50,
       clickYPercent: 50,
       action: "RightClick",
-    } as any);
+    });
     expect(
       container.querySelector(".click-indicator.right-click"),
     ).toBeInTheDocument();
@@ -296,7 +299,7 @@ describe("CropEditorModal", () => {
       clickXPercent: 50,
       clickYPercent: 50,
       action: "Click",
-    } as any);
+    });
     const indicator = container.querySelector(".click-indicator") as HTMLElement;
     expect(indicator).toBeInTheDocument();
     expect(indicator.classList.contains("double-click")).toBe(false);
